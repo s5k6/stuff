@@ -1,0 +1,379 @@
+#!/bin/bash
+
+# tz --- leery tar+gzip+bzip2+lzma frontend
+# Copyright 2008 Stefan Klinger <http://stefan-klinger.de>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+set -u;
+
+version='2019-Sept-3'; # prevoius version was 2013-Jan-13 !!!
+
+
+
+# Default compressor and extension
+zip='bzip2'; ext='bz2';
+
+
+
+# Print error message and terminate with exit status 1.
+
+function error { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+
+
+
+# Prompt the user, and wait for 'yes' or 'no'.
+
+function askYesNo { # args: <Question string>
+  while read -p $'\e[34m'"$* [yes/no] "$'\e[m' answer; do
+    test "$answer" = yes && return 0;
+    test "$answer" = no && return 1;
+    echo -e 'Please type either "yes" or "no".'
+  done;
+  error "Failed to read answer.";
+}
+
+
+
+# Ask before overwriting a file, and remove it if so.
+
+function overwrite { # args: <filename>
+    test -e "$1" || return 0;
+    askYesNo "Overwrite ${1}" || return 1;
+    test -w "$1" || error "Cannot write ${1}";
+    rm -rf "$1" || error "Unable to remove ${1}.";
+}
+
+
+
+# Fails if the passed command is not executable.
+
+function avail { # args: <tool>
+  type -p "$1" > /dev/null || error "Required tool '${1}' is not installed."
+}
+
+
+
+# Removes list of files, used by 'trap _ exit'
+
+function cleanup { # args: <filename>*
+  echo -e '\nExiting while processing; cleanup required!';
+  echo "Leftovers: $*";
+}
+
+
+
+# Decompress an archive.
+
+function doUnzipArch { # args: <source> <unzipper> <target>
+  avail "$2";
+  test "$2" = 'unzip' || avail tar;
+  if overwrite "$3"; then
+    tmp="$(mktemp -d "${3}.XXXXXXXXXX")" || error "mktemp failed.";
+    trap "cleanup '${3}' '${tmp}'" exit;
+    echo "Extracting (tmp=${tmp})";
+    if test "$2" = 'unzip'; then
+        unzip "$1" -d "$tmp" || error 'FAILED';
+    else
+        cat "$1" | eval "$2" | tar -k -C "$tmp" -x || error ' FAILED';
+    fi;
+    echo -n 'Policy checking...';
+    if test "$(ls -A "$tmp")" = "$3"; then
+      echo ' done';
+
+      if mv "${tmp}/${3}" "${3}"; then
+        true;
+      else
+        origMode="$(stat -c "%a" "${tmp}/${3}")" || error "Could not determine file mode.";
+        chmod 700 "${tmp}/${3}" || error "Could not chmod.";
+        mv "${tmp}/${3}" "${3}" || error "Moving from ${tmp} failed.";
+        chmod "$origMode" "$3" || error "Could not chmod.";
+      fi;
+      rm -rf "$tmp" || error "Removing ${tmp} failed.";
+    else
+      mv "$tmp" "$3" || error "Renaming ${tmp} failed.";
+      daisies+=("${3}");
+    fi;
+    trap - exit;
+  else
+    skip+=("${1}");
+  fi;
+}
+
+
+
+# Compress a directory.
+
+function doZipDir { # args: <source> <zipper> <target>
+  avail "$2";
+  test "$2" = 'zip' || avail tar;
+  if overwrite "$3"; then
+    trap "cleanup '${3}'" exit;
+    echo "Compressing into: '${3}'";
+    if test "$2" = 'zip'; then
+        zip -r "$3" "$1" || error 'FAILED';
+    else
+        tar -C "$(dirname ${1})" -c "$(basename ${1})" | "${2}" -9 > "$3" || error 'FAILED';
+    fi;
+    trap - exit;
+  else
+    skip+=("${1}");
+  fi;
+}
+
+
+
+# Decompress a file.
+
+function doUnzipFile { # args: <source> <unzipper> <target>
+  avail "$2";
+  if overwrite "$3"; then
+    trap "cleanup '${3}'" exit;
+    echo "Extracting";
+    cat "$1" | "$2" > "$3" || error " FAILED";
+    trap - exit;
+  else
+    skip+=("${1}");
+  fi;
+}
+
+
+
+# Compress a file
+
+function doZipFile { # args: <source> <zipper> <target>
+  avail "$2";
+  if overwrite "$3"; then
+    trap "cleanup '${3}'" exit;
+    echo "Compressing into: '${3}'";
+    if test "$2" = 'zip'; then
+        zip "$3" "$1" || error 'FAILED';
+    else
+        cat "$1" | eval "${2}" -9 > "$3" || error ' FAILED';
+    fi;
+    trap - exit;
+  else
+    skip+=("${1}");
+  fi;
+}
+
+
+
+# show help if no arguments given
+
+if test -z "${1:-}"; then
+  cat <<EOF
+
+Name
+====
+
+\`tz\` — a leery frontend to tar, gzip, bzip2, lzma, xz, and zip.
+
+Version ${version}
+
+
+Synopsis
+========
+
+    tz                                # this help, markdown format
+    tz [-g|-b|-l|-x|-z] ‹arg›...      # do work
+
+Compress or extract the passed arguments using the right tools, while
+not accidentally overwriting files or mixing archive contents.
+
+
+Description
+===========
+
+Each argument is processed on its own, with the latest given options in
+effect.
+
+If ‹arg› is a directory, it is tar'ed and then compressed using either
+gzip (-g), bzip2 (-b), lzma (-l), or xz (-x), defaulting to ${zip}.  If
+-z is given, the directory is zipped, no tar involved.  All compression
+tasks following on the command line are affected by choosing a
+compressor.
+
+If ‹arg› is a file, the action taken is determined by its suffix:
+
+  \`.tar.(xz|lzma|bz2|gz)\`, or \`.t(xz|lz|b2|bz|gz)\`
+  ~   Extract the compressed tar archive, enforcing secure naming
+      conventions (see "Security" below).
+
+  \`.xz\`, \`.lzma\`, \`.bz2\`, or \`.gz\`
+  ~   Extract the file using the usual naming conventions, i.e.,
+      \`foo.gz\` goes to \`foo\`.
+
+  \`.zip\`
+  ~   Extract the contents, enforcing secure naming conventions, figure
+      out whether it was a file, a directory, or a collection of items,
+      and rearrange accordingly.
+
+  Other files
+  ~   are compressed using either gzip, bzip2, lzma, xz, or zip, as
+      choosen with aforementioned options.
+
+In either case, the original file(s) will be left intact.  Output is
+always in the current directory.  If the argument contains slashes, the
+last component of the path is used to determine the name to be created.
+
+
+Security
+========
+
+\`tz\` is designed to ask you before overwriting any files.  If you
+decide to overwrite any file or directory, the victim in question will
+be removed first.  Hence, it is impossible to extract from an archive
+into a directory while keeping the files therein.  This is an intended
+feature, since it avoids mixing data from two archives, and matches my
+most common usecase.
+
+All archives are required to put their contents into a directory whose
+name matches the name of the archive.  I.e., all the files in
+\`foo.tar.bz2\` must belong to a top level directory \`foo\`.  To enforce
+this, \`tz\` will, as an intermediate step, do all extracting below a
+newly created temporary directory in your current path, and rearrange
+the contents later on, if safe to do so.  This matches the
+recommendations for untrusted archives given in the tar documentation.
+
+
+Bugs
+====
+
+There are probably some.  So use at your own risk.  For debugging
+contact Stefan Klinger <http://stefan-klinger.de>.
+
+EOF
+    exit 0;
+fi;
+
+
+
+# List of targets that generated a warning.
+daisies=();
+
+# List of sources not processed on user intervention.
+skip=();
+
+# make sure some basic tools are available
+avail sed;
+
+
+
+if test -r "${HOME}/.tzrc"; then
+    echo "Reading defaults from ~/.tzrc";
+    source "${HOME}/.tzrc";
+    test "${version}" = "${forVersion:-unknown}" || error "Unsupported version in '~/.tzrc'";
+fi;
+
+
+
+while test "${1:-}"; do
+    if test "${1:0:1}" = '-'; then
+        case "${1}" in
+
+            -b)
+                echo "Using bzip2 for compression.";
+                zip='bzip2'; ext='bz2';;
+
+            -g)
+                echo "Using gzip for compression.";
+                zip='gzip'; ext='gz';;
+
+            -l)
+                echo 'Using lzma for compression';
+                zip='lzma'; ext='lzma';;
+
+            -x)
+                echo 'Using xz for compression';
+                zip='xz'; ext='xz';;
+
+            -z)
+                echo 'Using zip for compression and archive generation';
+                zip='zip'; ext='zip';;
+
+            *)
+                error "Do not understand argument '${1}'.";;
+        esac;
+
+    # compress directory
+    elif test -d "$1"; then
+        echo "Compressing directory ${1}";
+        if test "$zip" = 'zip'; then
+            doZipDir "$1" "$zip" "$(basename "$1").${ext}";
+        else
+            doZipDir "$1" "$zip" "$(basename "$1").tar.${ext}";
+        fi;
+
+    # process file
+    elif test -f "$1"; then
+        echo "Processing file ${1}";
+        case "$1" in
+
+            # extract and untar bzip2'ed tar archives
+            *.tar.bz2) doUnzipArch "$1" bunzip2 "$(basename "$1" .tar.bz2)";;
+            *.tb2) doUnzipArch "$1" bunzip2 "$(basename "$1" .tb2)";;
+            *.tbz) doUnzipArch "$1" bunzip2 "$(basename "$1" .tbz)";;
+
+            # extract and untar gzip'ed tar archives
+            *.tar.gz) doUnzipArch "$1" gunzip "$(basename "$1" .tar.gz)";;
+            *.tgz) doUnzipArch "$1" gunzip "$(basename "$1" .tgz)";;
+
+            # extract and untar lzma'ed tar archives
+            *.tar.lzma) doUnzipArch "$1" unlzma "$(basename "$1" .tar.lzma)";;
+            *.tlz) doUnzipArch "$1" unlzma "$(basename "$1" .tgz)";;
+
+            # extract and untar xz'ed tar archives
+            *.tar.xz) doUnzipArch "$1" unxz "$(basename "$1" .tar.xz)";;
+            *.txz) doUnzipArch "$1" unxz "$(basename "$1" .txz)";;
+
+            # extract bzip2'ed files
+            *.bz2) doUnzipFile "$1" bunzip2 "$(basename "$1" .bz2)";;
+
+            # extract gzip'ed files
+            *.gz) doUnzipFile "$1" gunzip "$(basename "$1" .gz)";;
+
+            # extract lzma'ed files
+            *.lzma) doUnzipFile "$1" unlzma "$(basename "$1" .lzma)";;
+
+            # extract xz'ed files
+            *.xz) doUnzipFile "$1" unxz "$(basename "$1" .xz)";;
+
+            # extract zip archives
+            *.zip) doUnzipArch "$1" unzip "$(basename "$1" .zip)";;
+
+            # compress other files
+            *) doZipFile "$1" "${zip}" "$(basename "$1").${ext}";
+
+        esac;
+
+    else
+        error "No such file or directory: ${1}";
+
+    fi;
+    shift;
+    echo;
+done;
+
+# Print a report.
+
+if test "${#daisies[@]}" -gt 0; then
+    warn 'Grouped some contents under new directory.  Avoid creating such archives!';
+    echo "The delinquents: ${daisies[@]}";
+fi;
+
+if test "${#skip[@]}" -gt 0; then
+    warn 'Skipped some archives:';
+    echo "${skip[@]}";
+fi;
+
+exit 0;

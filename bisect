@@ -1,0 +1,186 @@
+#!/usr/bin/python
+
+import sys
+import subprocess
+import types
+
+def cat(ws):
+    return ' '.join(ws)
+
+def parseArguments():
+
+    settings = types.SimpleNamespace(
+        ln = None,
+        hn = None,
+        command = [],
+        monotonic = False,
+        verbose = True
+    )
+
+    i = 1;
+    while i < len(sys.argv):
+        try:
+            v = int(sys.argv[i])
+            if settings.ln is None:
+                settings.ln = v
+            elif settings.hn is None:
+                settings.hn = v
+        except ValueError:
+            if (sys.argv[i] == '-m'):
+                settings.monotonic = True
+            elif (sys.argv[i] == '-q'):
+                settings.verbose = False
+            else:
+                settings.command = sys.argv[i:]
+                return settings
+        i += 1
+        
+    settings.command = sys.argv[i:]
+    return settings
+
+
+def dflt(d, x):
+    return d if x is None else x
+        
+
+def main():
+
+    if len(sys.argv) < 2:
+        print(
+'''
+Exponential and binary search.
+
+    bisect [-m] [-q] [A [B]] COMMAND...
+
+Finds the integer argument for which COMMAND changes its return
+status.  An exponential search is started from A (default 0), then B
+(default A+100), until the return code of COMMAND changes.  Then a
+binary search is used to find the two values where the change occurs.
+
+`-m` makes the search monotonic, i.e., in the exponential search phase
+only the value B is changed, in the direction indicated by the order
+of A and B.
+
+`-q` makes bisect less verbose, i.e., it does not print the commands
+and their return codes, only the result found.
+
+Every word in COMMAND is subject to Python's string interpolation,
+providing the value as `{N}`.  You may use formatting like `{N:x}` or
+`{N:8d}`, see [1].
+
+Examples:
+
+-1-
+For what `x` does `test x -gt 1500` change its exit code?
+
+    bisect test {N} -gt 1500
+
+-2-
+Animation of the search for N < 12, starting from the values 49, 45.
+The second version is monotonic, but only searches half the space.
+
+    bisect -q 49 45 sh -c 'sleep 0.3; printf "%{N}d\\n" {N}; (({N} < 12))'
+    bisect -q -m 49 45 sh -c 'sleep 0.3; printf "%{N}d\\n" {N}; (({N} < 12))'
+
+-3-
+What hexadecimal value is 200 decimal?
+
+    bisect sh -c '((16#{N:x} > 200))'
+
+Searching a value must be expressed using an inequality.
+
+-4-
+Search a square root of 9000000.  We are interested in a value between
+2000 and 3000, or below.
+
+    ./bisect 3000 2000 -m sh -c '(( {N} * {N} > 9000000))'
+
+The order of the start values 3000 and 2000 is only relevant due to
+the presence of `-m`, which makes the search monotonic in that
+direction.  Note that 3000 is not found, because 3001 is never tested.
+
+____________________
+[1] https://docs.python.org/3.4/library/string.html#format-string-syntax
+'''
+        )
+        
+        exit(0)
+        
+    args = parseArguments()
+
+    ln = dflt(0, args.ln)
+    hn = dflt(ln + 100, args.hn)
+
+    if len(args.command) < 1:
+        print('Need command to execute.')
+        exit(1)
+
+    # closure that creates command vector
+    def cmd(n):
+        return [ x.format(**{'N': n}) for x in args.command ]
+
+    # closure that runs command (verbosely?)
+    if args.verbose:
+        def run(cmd):
+            r = subprocess.run(cmd)
+            print(cat(cmd) + " → " + str(r.returncode))
+            return r.returncode
+    else:
+        def run(cmd):
+            return subprocess.run(cmd).returncode
+        
+    try:
+        if cmd(1) == cmd(2):
+            print('The command looks independent of {N}.')
+            exit(1)
+    except KeyError:
+        print('Only valid key is `{N}`.')
+        exit(1)
+
+    if args.verbose:
+        print('# escalating')
+
+    try:
+        lv = run(cmd(ln))
+        hv = run(cmd(hn))
+    except FileNotFoundError:
+        print('Command `' + cmd('N')[0] + '` not found.')
+        exit(1)
+        
+
+    mn = ln
+    if args.monotonic: # do a monotonic search only
+        while (lv == hv):
+            mn, hn = hn, 2 * hn - ln
+            hv = run(cmd(hn))
+    else: # escalate around the start value
+        while (lv == hv):
+            mn, (ln, lv), hn = ln, (hn, hv), 2 * ln - hn
+            hv = run(cmd(hn))
+    ln =  mn
+        
+    if args.verbose:
+        print('# narrowing')
+
+    while (abs(hn - ln) > 1):
+        mn = (ln + hn) // 2
+        mv = run(cmd(mn))
+        if (mv == lv):
+            ln = mn
+        else:
+            hn = mn
+
+    if args.verbose:
+        print('# found')
+        print(cat(cmd(ln)) + " → " + str(lv) + "\n" + cat(cmd(hn)) + " → " + str(hv))
+    else:
+        print(str(ln) + " → " + str(lv) + ", " + str(hn) + " → " + str(hv))
+
+    
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('Interrupted')
+        exit(1)
+

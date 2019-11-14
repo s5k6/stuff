@@ -1,0 +1,103 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+
+
+function err {
+    echo "recall: ${@}" >&2;
+    exit 1;
+}
+
+
+
+dir="${HOME}/.recall";
+
+
+
+if test -z "${1:-}"; then
+
+    pushd "${dir}" >/dev/null || err "Does not exist: ${dir}";
+    echo "Currently, I can recall the following.  Use ‘-h’ for more help."
+    ls;
+    popd >/dev/null;
+    exit 0;
+
+elif test "${1:0:1}" = '-'; then
+
+    case "${1:1:1}" in
+
+        h)
+            cat <<EOF
+
+Synopsis
+
+    recall — show list of names that can be recalled.
+
+    recall <name> — recall what is stored as <name>.
+
+    recall <name> <command>... — try command and use as definition of
+                                 <name> if successful.
+
+    recall -q <name> — query definition of <name>.
+
+    recall -d <name> — delete <name>.
+
+    recall -h — show this help.
+
+
+Notes
+
+    Recall looks for definitions in ‘~/.recall’.  An executable is
+    run, non-excutables are sourced, symlinks are followed.
+
+EOF
+            exit 0;;
+
+        q)
+            test "${2:-}" || err '-q needs identifier';
+            cat "${dir}/${2}";
+            exit 0;;
+
+        d)
+            test "${2:-}" || err '-d needs identifier';
+            rm "${dir}/${2}";
+            exit 0;;
+
+        *)
+            err "Do not understand argument ‘${1}’.";;
+
+    esac;
+else
+
+    mkdir -p "${dir}";
+    name="${1}";
+    shift;
+    last="${dir}/${name}";
+    cmd="$(printf "'%s' " "$@" | sed -r "s/'([^' \"\\]*)'/\1/g; s/ *$/\n/")";
+
+    if test "$cmd"; then
+        eval "${cmd}" && echo "$cmd" >| "$last";
+    else
+        if test -x "${last}"; then
+            echo "running ${name}" >&2;
+            "${last}";
+        elif test -r "${last}"; then
+            echo "sourcing ${name}" >&2;
+            source "${last}";
+        else
+            err "cannot recall ${name}";
+        fi;
+    fi;
+
+fi;
+
+
+
+
+
+
+
+
+# dispwin -c -d1 -I '.local/share/DisplayCAL/storage/Screen 1 #1 2016-11-01 16-30 D5000 2.2 M-S XYZLUT+MTX/Screen 1 #1 2016-11-01 16-30 D5000 2.2 M-S XYZLUT+MTX.icc'
+

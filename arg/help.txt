@@ -1,0 +1,6 @@
+Print command line arguments.  The output format is
+
+    "%5i\t%s\n"
+
+If $ARG_LOG is set, it specifies the file to print to, otherwise print
+to stdout.  If $ARG_DUMP is set, it specifies the file to dump stdin to.

@@ -1,0 +1,39 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+function ask_yN {
+    local answer='';
+    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer;
+    if test "${answer}" = y; then
+        info yes;
+        return 0;
+    fi;
+    info no;
+    return 1;
+}
+
+keylist="${HOME}/.ssh/ssh-authorize-list"
+
+tgt="${1?'need user@host name'}";
+
+if ! test -e "${keylist}"; then
+    (
+        echo '# List of keys to be sent to hosts you want to conect to';
+        ls ~/.ssh/*.pub;
+    ) > "${keylist}";
+    nano "${keylist}";
+fi;
+
+mapfile -t keys < <(sed -En 's/#.*//;/^\s*$/d;/\.pub$/p' "${keylist}" | sort -u);
+
+info "List of SSH keys: ${keylist}"
+printf '%s\n' "${keys[@]}"
+
+ask_yN "Append these SSH keys to ${tgt}:~/.ssh/authorized_keys" || exit 0;
+
+cat "${keys[@]}" | ssh "$tgt" 'mkdir -p ~/.ssh; chmod 700 ~/.ssh; cat >>~/.ssh/authorized_keys';

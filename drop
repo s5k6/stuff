@@ -1,0 +1,190 @@
+#!/usr/bin/python2
+
+
+# Use this as follows:
+#
+#     $ drop -l youtube | while read url; do xterm -e youtube-dl "$url"& done
+#
+# Then drop links to videos into the window.
+
+
+import pygtk
+pygtk.require('2.0')
+
+import gtk
+import sys
+from optparse import OptionParser
+
+
+
+# Parse the command line options.
+# http://docs.python.org/library/optparse.html
+
+op = OptionParser(
+   usage = """usage: %prog [options] [title...]
+   bla"""
+   )
+op.add_option(
+   "-l",
+   dest = "loop",
+   action = "store_true", default = False,
+   help = "Repeat asking for all titles.  Otherwise terminate after the corresponding number of drops."
+   )
+op.add_option(
+   "-e",
+   dest = "escape",
+   action = "store_true", default = False,
+   help = "Use escape sequences for some characters."
+   )
+op.add_option(
+   "-m",
+   dest = "mime",
+   action = "store_true", default = False,
+   help = "Print the list of available mime types offered by the source.  Accepts only one drop, and then terminates.  Useful for testing."
+   )
+op.add_option(
+   "-q",
+   dest = "query",
+   action = "store",
+   default = "UTF8_STRING,COMPOUND_TEXT,TEXT,STRING,text/plain;charset=utf-8,text/plain",
+   help = "Comma-separated list of mime types to accept, the first one offered by the source is used.  The default list is: %default"
+   )
+(opts, args) = op.parse_args()
+
+opts.titles = args
+
+# We want to see a sequence of title sepecified with -T, or a single title
+# specified with -t, or both. Only default if none is given.
+
+if opts.titles == []:
+   opts.titles = ["drop, middle-click\nor [C-v] here\n[q] to quit"]
+
+title = 0
+
+# The list of titles specifies how many requests should be performed. Repeat
+# once for each -T, then infinitely for -t if given.
+
+def asknext():
+   global title
+   if title >= len(opts.titles):
+      if opts.loop:
+         title = 0;
+   if title >= len(opts.titles):
+      gtk.main_quit()
+   else:
+      l.set_text(opts.titles[title])
+      title += 1
+
+
+
+# There are two modes of operation. With -m we accept each drop and display the
+# available mime types. Unfortunately, this requires us to write our own motion
+# callback. And I failed to do the highlighting of the widget.
+
+def drop_mime_cb(wid, context, x, y, time):
+   print(('\n'.join([str(t) for t in context.targets])))
+   context.finish(True, False, time)
+   gtk.main_quit()
+   return True
+
+def motion_cb(wid, context, x, y, time):
+    context.drag_status(gtk.gdk.ACTION_COPY, time)
+    return True
+
+
+
+# The second mode of operation is more standad: Depending on what type (target)
+# the data is of, chose how to deliver it. Currently, only the strings are
+# accepted, and printed to stdout.
+
+def extract_cb(wid, context, x, y, data, info, time):
+
+   if data.target in opts.query.split(','):
+      print(data.get_text())
+      sys.stdout.flush()
+      context.finish(True, False, time)
+      asknext()
+
+   else:
+      sys.stderr.write('Dunno how to print data: ' + data.target + '\n')
+      context.finish(False, False, time)
+
+   return True
+
+
+
+# Handle Keystrokes on the window.
+
+def key_cb(wid, event):
+   keyname = gtk.gdk.keyval_name(event.keyval)
+   #print "Key %s (%d) was pressed" % (keyname, event.keyval)
+   if event.state == 0:
+      if keyname in ['q', 'Escape']: gtk.main_quit()
+   elif event.state == gtk.gdk.SHIFT_MASK:
+      if keyname == 'Insert': print_primary()
+   elif event.state == gtk.gdk.CONTROL_MASK:
+      if keyname == 'v': print_primary()
+
+
+
+# handle mouse clicks on window
+
+def button_cb(widget, event):
+   # midle click event
+   if event.button == 2: print_primary()
+   return True
+
+
+
+# print primary selection
+
+def print_primary():
+   t = primary.wait_for_text()
+   if t != None:
+      if opts.escape:
+         print t.replace('\\', '\\\\').replace('\n', '\\n').replace('\t', '\\t')
+      else:
+         print t
+      sys.stdout.flush()
+      asknext()
+
+
+
+
+# set up primary clipboard to use for middle click
+primary = gtk.Clipboard(selection="PRIMARY")
+
+w = gtk.Window()
+#w.set_size_request(150, 100)
+
+# http://www.pygtk.org/pygtk2tutorial/sec-DNDMethods.html
+
+if opts.mime:
+   w.drag_dest_set(0, [], 0)
+   w.connect('drag_motion', motion_cb)
+   w.connect('drag_drop', drop_mime_cb)
+else:
+   w.drag_dest_set(
+      ( gtk.DEST_DEFAULT_MOTION |
+        gtk.DEST_DEFAULT_HIGHLIGHT |
+        gtk.DEST_DEFAULT_DROP
+        ),
+      ([(t,0,0) for t in opts.query.split(',')]),
+      gtk.gdk.ACTION_COPY)
+   w.connect('drag_data_received', extract_cb)
+
+w.connect("key_press_event", key_cb)
+w.add_events(gtk.gdk.BUTTON_PRESS_MASK)
+w.connect("button_press_event", button_cb)
+w.connect('destroy', lambda w: gtk.main_quit())
+
+l = gtk.Label()
+l.set_padding(30,30)
+l.set_justify(gtk.JUSTIFY_CENTER)
+asknext()
+w.add(l)
+
+w.show_all()
+
+# Start the program
+gtk.main()

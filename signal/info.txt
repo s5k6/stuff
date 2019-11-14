@@ -1,0 +1,11 @@
+
+Invocation:   signal <timeout>
+
+This program will print a message for every signal in the range 1..%d
+it receives, the obvious exceptions being SIGKILL(9), SIGSTOP(19), and
+undefined signals.  It terminates after <timeout> seconds without
+receiving any signal.  The integer <timeout> must be specified in the
+range %d..%d.
+
+#
+, SIGNALS, MIN_IDLE, MAX_IDLE

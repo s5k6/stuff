@@ -1,0 +1,71 @@
+#!/usr/bin/bash
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo "$@" >&2; exit 1; }
+function warn { echo "$@" >&2; }
+
+function ask_yN {
+    local answer='';
+    read -n 1 -s -p "$* [yN]" answer;
+    if test "${answer}" = y; then
+        echo yes;
+        return 0;
+    fi;
+    echo no;
+    return 1;
+}
+
+printf '\n';
+
+printf '   ';
+for f in 'none' $(seq 30 37); do
+    printf '%8s' "$f";
+done;
+printf '\n';
+for b in '' $(seq 40 47); do
+    color="$b";
+    printf '%4s' "${b:-none}";
+    for f in '' $(seq 30 37); do
+        color="${b}${f:+${b:+;}}${f}";
+        printf ' \e[%sm %5s \e[m' "$color" "${color:-hello}";
+    done;
+    printf '\n';
+done;
+
+printf '\n';
+
+printf '   ';
+for f in 'none' $(seq 30 37); do
+    printf '%8s' "$f";
+done;
+printf '\n';
+for b in '' $(seq 1 4); do
+    color="$b";
+    printf '%4s' "${b:-none}";
+    for f in '' $(seq 30 37); do
+        color="${b}${f:+${b:+;}}${f}";
+        printf ' \e[%sm %5s \e[m' "$color" "${color:-hello}";
+    done;
+    printf '\n';
+done;
+
+
+cat <<'EOF'
+
+There are 8 fg colors, 8 bg colors, and one default color for each, fg and bg.
+Set with
+
+    printf '\e[%sm' ‹arg›
+
+Where ‹arg› is a `;` separated list of the following:
+
+  | ‹arg›         | description                           |
+  |---------------+---------------------------------------|
+  | '' or 0       | reset to default                      |
+  | 30 .. 37      | set fg color                          |
+  | 40 .. 47      | set bg color                          |
+  | 1, 2, 3, 4, 5 | bold, faint, italic, underline, blink |
+
+EOF

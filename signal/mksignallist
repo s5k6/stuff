@@ -1,0 +1,31 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+# This script generates an array of all signal names, except for
+# SIGKILL and SIGSTOP.  These two, and undefined signal numbers are
+# set to NULL.  The program will install signal handlers for all
+# signals with a name, i.e., not for the unknown onesn and not for
+# SIGKILL and SIGSTOP.
+
+
+# Get the number of signals
+SIGNALS=$(kill -l | grep -Eo '[0-9]+\)' | sed -r 's/\)//' | sort -nr | head -n1);
+
+# header of definition
+cat <<EOF
+#define SIGNALS ${SIGNALS}
+char const *const name[SIGNALS+1] = {
+EOF
+
+# generate list of strings with names, with skipped set to NULL
+kill -l |
+    sed -r 's/\s([0-9])\)/0\1)/g;s/\)\s*/:/g;s/\s+/\n/g' |
+    sed -r '/^\s*$/d;/^(09|19)/d' |
+    join -t: -j1 -eunknown -a2 -o1.2 - <(seq -w 0 64) |
+    sed -r 's/^|$/"/g;s/"unknown"/NULL/;$!s/$/,/';
+
+# footer of definition
+cat <<EOF
+};
+EOF

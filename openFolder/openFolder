@@ -1,0 +1,21 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+# This consumes a path argument (maybe prefixed with `file://`), and
+# opens an `xterm` there.  If it's a directory, list the newest 10
+# files, newest last.  Otherwise, assume it's a file and only list
+# that.  Then launch a shell there.
+
+d="${1:?Need path argument}"; # get argument
+d="${d##file://}"; # strip prefix
+
+if test -d "${d}"; then
+    f='.';
+else
+    f="$(basename "$d")";
+    d="$(dirname "$d")";
+fi;
+
+cd "$d";
+xterm -e "ls -l -tr -h '$f' | tail; exec \$SHELL" &

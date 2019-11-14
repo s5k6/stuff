@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -u;
+
+opt='';
+
+while test "${1:0:1}" = '-'; do
+    opt="${opt} '${1}'";
+    shift;
+done;
+
+
+until "$@" | eval "less -S ${opt}"; do
+    :
+done;

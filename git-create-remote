@@ -1,0 +1,48 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+function ask_yN {
+    local answer='';
+    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer;
+    if test "${answer}" = y; then
+        info yes;
+        return 0;
+    fi;
+    info no;
+    return 1;
+}
+
+test "${1-}" || err 'need host name';
+host="$1";
+
+name="${host%%.*}";
+
+
+
+repo="$(basename "$(git rev-parse --show-toplevel)")";
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+path="git-repos/${repo}.git";
+
+cat <<EOF
+Create: ${host}:${path}
+Local name of remote: ${name}
+Push branch: ${branch}
+EOF
+ask_yN 'Continue?'
+
+ssh "$host" <<.
+set -u -e -C; shopt -s nullglob;
+! test -e "${path}";
+git init --bare "${path}";
+.
+
+git remote add "$name" "${host}:${path}";
+git push "$name" "$branch";
+

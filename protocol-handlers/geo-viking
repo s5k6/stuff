@@ -1,0 +1,12 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+
+test "${1-}" || err 'Need `geo:` URI as argument.'
+
+args="$(sed -rn 's#^geo:(-?[.0-9]+),(-?[.0-9]+).*$#--latitude \1 --longitude \2#p' <<< "$1")";
+test "${args-}" || err 'Cannot parse argument as `geo:` URI.'
+
+viking ${args} "${HOME}/.viking/home.vik" &

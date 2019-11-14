@@ -1,0 +1,83 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo "$@" >&2; exit 1; }
+function warn { echo "$@" >&2; }
+
+function ask_yN {
+    local answer='';
+    read -n 1 -s -p "$* [yN]" answer;
+    if test "${answer}" = y; then
+        echo yes;
+        return 0;
+    fi;
+    echo no;
+    return 1;
+}
+
+dir="$(mktemp -t -d 'pdfDiff.XXXXXXXXXX')";
+
+n1="$(basename "$1" .pdf)";
+d1="${dir}/a-${n1}";
+mkdir "${d1}";
+pdftocairo -png "$1" "${d1}/page"&
+echo "Launched \`pdftocairo ${n1}.pdf\`, PID=$!";
+
+n2="$(basename "$2" .pdf)";
+d2="${dir}/b-${n2}";
+mkdir "${d2}";
+pdftocairo -png "$2" "${d2}/page"&
+echo "Launched \`pdftocairo ${n2}.pdf\`, PID=$!";
+
+echo 'Waiting for images to be created...';
+wait;
+
+echo 'Renumbering pages...';
+pushd "$d1";
+ls | sed -rn 's/^page-0*([1-9][0-9]*).png$/printf "mv & %08d.png\n" "\1"/p' | sh | sh&
+popd;
+pushd "$d2";
+ls | sed -rn 's/^page-0*([1-9][0-9]*).png$/printf "mv & %08d.png\n" "\1"/p' | sh | sh&
+popd;
+
+wait;
+
+
+cat <<EOF
+Images created below \`${dir}\`.
+EOF
+
+if diff <(ls "$d1") <(ls "$d2") > "${dir}/pagediff"; then
+    rm "${dir}/pagediff";
+    echo 'Same amount of pages found.';
+else
+    cat <<EOF
+Different number of pages, see \`${dir}/pagediff\`.
+EOF
+fi;
+
+declare -i n=$(nproc);
+join <(ls "$d1") <(ls "$d2") | while read img; do
+    if test $n -gt 0; then
+        n=$((n - 1));
+    else
+        wait -n;
+    fi;
+    gm composite -compose difference "${d1}/${img}" "${d2}/${img}" "${dir}/${img}" &
+done;
+
+echo 'Waiting for image subtraction to finish...';
+wait;
+
+#rm -r "${d1}" "${d2}";
+
+geeqie "${dir}" &
+
+cat <<EOF
+____________________________________________________________
+Listing of difference images, see \`${dir}\`:
+EOF
+ls -l --sort=size -r "${dir}";
+
+echo Done;

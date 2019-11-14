@@ -1,0 +1,53 @@
+#!/usr/bin/python
+
+import sys
+
+def main():
+                
+    if len(sys.argv) > 2:
+        def withHeader(a):
+            print('==>', a, '<==') # like `head`(1)
+            with open(a, 'tr') as fh:
+                tabulate(fh)
+                
+        withHeader(sys.argv[1]) # newlines between, but not before/after
+        for a in sys.argv[2:]:
+            print()
+            withHeader(a)
+
+    elif len(sys.argv) > 1:
+        with open(sys.argv[1], 'tr') as fh:
+            tabulate(fh)
+                
+    else:
+        tabulate(sys.stdin)    
+
+def tabulate(fh):
+
+    lines = []
+    widths = []
+    cols = 0
+    for line in fh:
+        line = line.rstrip('\n')
+        words = line.split('\t')
+        lines.append(words)
+        cols = max(cols, len(words))
+        widths = [
+            max(a, b)
+            for (a, b) in zip(
+                    widths + [0]*cols,
+                    [len(w) for w in words] + [0]*cols
+            )
+        ]
+    #print(cols, widths)
+
+    fmt = ' '.join(['{:' + str(w) + '}' for w in widths[:cols]])
+    #print(cols, fmt)
+
+    for line in lines:
+        line = line + list(('',)*cols)
+        print(fmt.format(*line))
+
+
+if __name__ == '__main__':
+    main()

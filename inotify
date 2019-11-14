@@ -1,0 +1,60 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+function ask_yN {
+    local answer='';
+    read -n 1 -s -p "$* [yN]" answer;
+    if test "${answer}" = y; then
+        echo yes;
+        return 0;
+    fi;
+    echo no;
+    return 1;
+}
+
+if test "$#" = 0; then
+    cat <<'EOF'
+
+Repeatedly run COMMAND, once at the beginning, and then every time
+`inotifywait` reports a `close_write` event while watching FILES.  A
+semaphore is used to throttle execution to at most once per second.
+
+    inotify FILES... -- COMMAND...
+
+EOF
+exit; fi;
+
+s="inotify-${RANDOM}";
+trap "sem '$s' -u 2>/dev/null" exit;
+
+files=()
+cmd=()
+args=( "${@}" )
+
+for (( i = 0; i < "${#args[@]}"; i++ )); do
+    if test "${args[$i]}" = '--'; then
+        files=( "${args[@]:0:$i}" )
+        cmd=( "${args[@]:$((i+1))}" )
+    fi;
+done;
+
+if test "${#cmd[@]}" -lt 1; then
+    err 'Invalid usage.  Run without arguments for help.';
+fi;
+
+echo "Files: ${files[@]}"
+echo "Cmd: ${cmd[@]}"
+
+clear;
+if "${cmd[@]}" 0<&-; then info ok; else warn failed; fi;
+while read e; do
+    if sem "$s" -i1 -x -t -f -v0 -- sleep 1; then
+        clear;
+        if "${cmd[@]}" 0<&-; then info ok; else warn failed; fi;
+    fi;
+done < <(inotifywait -m -e close_write --format %f "${files[@]}");

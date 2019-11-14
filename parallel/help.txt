@@ -1,0 +1,42 @@
+Synopsis
+
+    parallel -h
+    parallel $count < $jobfile
+
+Description
+
+    `parallel` reads a list of job descriptions, and runs at most
+    $count of them in parallel.
+
+    If $count is not given, `parallel` tries to use the environment
+    variable `PARALLEL`, the value returned from sysconf(3) for online
+    processors, or the hard-wired default 4, in that order.
+
+    A job description is a single line, which is split into words and
+    then fed to execvp(3).  Single and double quoting are supported,
+    the latter understanding the following escape sequences:
+
+        \n - newline
+        \t - tabstop
+        \\ - backslash
+        \" - double quote.
+
+    An unquoted backslash quotes the following character, as known
+    from the shell.
+
+Example
+
+    The following `bash` snippet generates smaller versions of all
+    JPEG files in the current directory, using GraphicsMagick `gm
+    convert`
+
+        ls *.jpeg |
+        sed -r "s/.*/gm convert '&' -resize 300x200 'small-&'/" |
+        parallel
+
+    The `sed` command is used to create job descriptions from the
+    listing provided by `ls`.  An alternative to the same end:
+
+        for i in *.jpeg; do
+            echo "gm convert '$i' -resize 300x200 'small-$i'";
+        done | parallel

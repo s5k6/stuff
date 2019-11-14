@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+
+badchar='][ !?*<>&\n\t"'\''$\\#():\|';
+
+ls -a --quoting-style=escape | sed -n '/['"$badchar"']/ {;s/\\ / /g;h;s/['"$badchar"']/_/g;s/\\./_/g;s/_\+/_/g;s/^_\|_$//g;s/^/'\''/;s/$/'\''/;x;s/'\''/\\x27/g;s/^/mv -n $'\''/;s/$/'\''/;G;s/\n/ /;p;}' | sh;

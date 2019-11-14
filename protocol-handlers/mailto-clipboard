@@ -1,0 +1,9 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+# use this as application to handle `mailto:` protocol in firefox.
+
+address="$(sed -E 's#^mailto:##; s#\?.*##' <<<"${1}")";
+echo "$address" | xclip -i;
+notify-send 'email in clipboard' "$address";

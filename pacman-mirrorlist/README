@@ -1,0 +1,9 @@
+Install:
+
+    # addscript pacman-mirrorlist
+
+When installed as a pacman hook [1], this will call the
+`pacman-mirrorlist` script every time the file
+`/etc/pacman.d/mirrorlist` is updated.
+
+    # install -oroot -groot -m644 -t/usr/share/libalpm/hooks/ mirrorlist.hook

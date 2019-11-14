@@ -1,0 +1,12 @@
+# When installed as a pacman hook [1], this will call the `pacman-mirrorlist`
+# script every time the file `/etc/pacman.d/mirrorlist` is updated.
+
+[Trigger]
+Operation = Upgrade
+Operation = Install
+Type = File
+Target = etc/pacman.d/mirrorlist
+
+[Action]
+When = PostTransaction
+Exec = /usr/bin/pacman-mirrorlist

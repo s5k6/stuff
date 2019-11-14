@@ -1,0 +1,45 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+IFS=: paths=($PATH)
+
+if test -z "${1-}"; then
+    cat <<EOF
+
+addscript -l SOURCE*   # symlinks to ~/.local/bin
+
+addscript -g SOURCE*   # installs to /usr/local/bin, chmod 755
+
+EOF
+
+elif test "$1" = '-l'; then
+    shift;
+    for i in "$@"; do
+        src="$(realpath "$i")";
+        tgt="${HOME}/.local/bin/$(basename "$i")";
+        rm -f "$tgt";
+        ln -s "$src" "$tgt";
+        ls -l "$tgt";
+    done;
+
+elif test "$1" = '-g'; then
+    shift;
+    for i in "$@"; do
+        src="$(realpath "$i")";
+        tgt="/usr/local/bin/$(basename "$i")"
+        rm -f "$tgt";
+        install -T -m 755 "${src}" "${tgt}";
+        ls -l "${tgt}";
+    done;
+
+else
+    err 'Need `-l` or `-g` as first argument';
+fi;
+
+
+

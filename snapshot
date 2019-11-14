@@ -1,0 +1,215 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+function ask_yN {
+    local answer='';
+    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer;
+    if test "${answer}" = y; then
+        info yes;
+        return 0;
+    fi;
+    info no;
+    return 1;
+}
+
+
+spinner=('-' '\' '|' '/');
+declare -i spinnerIndex=0
+cols="${COLUMNS-80}";
+function spin {
+    while read line; do
+        printf -v msg '\e[G[%s] %s' "${spinner[${spinnerIndex}]}" "${line}";
+        printf '%s\e[K' "${msg:0:${cols}-1}";
+        spinnerIndex="$(((spinnerIndex + 1) % ${#spinner[@]}))";
+    done
+    echo;
+}
+
+
+if test "${1-}" = '-h'; then
+    cat <<'EOF'
+
+This script hides the complexity of creating multiple snapshots of the
+current directory, using rsync with simple deduplication.  Call
+
+    snapshot -h  # list this help
+
+    snapshot     # list snapshots available for $PWD
+
+    snapshot -n name # rsync $PWD/ to $PWD.snapshots/name
+                     # also creates chsecksums from snapshot
+
+    snapshot -r name # rsync $PWD.snapshots/name/ to $PWD
+                     # will delete extra files
+
+Multiple snapshots share hardlinked files.  Be careful about that, and
+read `rsync(1)` about `--link-dest`.
+
+You may also restore a snapshot with `rsync(1)`, chosing another
+destination than $PWD:
+
+    rsync -avH --delete /path/to/dir.snapshots/name/ /path/to/destination
+    cd /path/to/destination
+    md5sum -c --quiet /path/to/dir.snapshots/name.md5
+
+This is not a backup tool!
+
+EOF
+    exit 0;
+fi;
+
+
+#src="$(pwd -P)"
+src="$(realpath .)"
+dir="$(dirname "${src}")";
+base="$(basename "${src}")";
+snapdir="${dir}/${base}.snapshots"
+
+
+
+if test -z "${1-}"; then
+
+    if test -d "${snapdir}"; then
+        echo "List snapshots in ${snapdir}"
+        cd "${snapdir}";
+        ls -T0 --color=never --si -l -tr -d */;
+    else
+        echo 'No snapshots exist.'
+    fi;
+    echo 'Run `snapshot -h` for help';
+
+elif test "${1-}" = -n; then
+
+    test -n "${2-}" || err 'Need name for new snapshot.';
+    name="$(basename "${2}")"
+    test "${2}" = "${name}" || err "Only final path component allowed: ${2}"
+
+    mkdir -p "${snapdir}"
+
+    if ! test -e "${snapdir}/README"; then
+        cat <<'EOF' >"${snapdir}/README"
+
+DO NOT EDIT ANYTHING BELOW THIS DIRECTORY
+
+Directories here represent snapshots created with `rsync(1)`, sharing
+hard links to save space.  Editing may violate integrity.  It is safe
+to delete individual snapshots.  Use provided checksum files to
+verify.
+
+EOF
+    fi;
+
+    snap="${snapdir}/${name}"
+    test -e "${snap}" && err "Already exists: ${snap}"
+
+    last="${snapdir}/.last" # may not exist
+
+    echo 'Creating snapshot'
+    echo "of:   ${src}"
+    echo "into: ${snap}"
+    if test -e "${last}"; then
+        echo "base: $(realpath "${last}")"
+    else
+        echo 'first snapshot';
+    fi
+
+    if test -e "${last}"; then
+        rsync -avH --link-dest="${last}" "${src}/" "${snap}" | spin || warn failed;
+    else
+        rsync -avH "${src}/" "${snap}" | spin || warn failed;
+    fi
+
+    # set link for last snapshot
+    ln -sfT "$(basename "${snap}")" "${last}"
+
+    partial="${snap}.md5_partial";
+    final="${snap}.md5";
+    ( # checksumming in background
+        cd "${snap}";
+        find . -type f -exec md5sum '{}' ';' || exit 1;
+        mv "${partial}" "${final}";
+    ) >|"${partial}" &
+
+    info 'Note: Waiting for checksum process running on snapshot'
+    echo 'Press key to do this in the background'
+    while fuser "${partial}" >/dev/null 2>&1; do
+        printf '\e[G%s' "$(wc -l "${partial}" 2>/dev/null)";
+        read -n1 -s -t2 && break;
+    done;
+    echo;
+
+    exit 0;
+
+elif test "${1-}" = '-r'; then
+
+    test -n "${2-}" || err 'Need name of snapshot to restore.';
+    name="$(basename "${2}")"
+
+    if test "${2}" = "${name}"; then
+        snap="${snapdir}/${name}"
+    else
+        warn 'Using snapshot created elsewhere'
+        snap="${2}";
+    fi;
+    test -d "${snap}" || err "No such snapshot: ${snap}"
+
+    ask_yN 'May delete files in your working directory!  Continue?' || exit
+    rsync -avH --delete "${snap}/" . | spin && info done || warn 'rsync failed';
+
+    if test -e "${snap}.md5"; then
+        echo "To verify, try: md5sum -c --quiet '${snap}.md5'";
+    else
+        echo 'No checksums found';
+    fi;
+
+elif test "${1-}" = '-c'; then
+
+    test -n "${2-}" || err 'Need name of snapshot to check against.';
+    name="$(basename "${2}")"
+
+    if test "${2}" = "${name}"; then
+        snap="${snapdir}/${name}"
+    else
+        warn 'Using snapshot created elsewhere'
+        snap="${2}";
+    fi;
+    if test -e "${snap}.md5"; then
+        echo 'Check whether files are present (checksums ignored)...';
+        count=0;
+        while read _ path; do
+            if ! test -e "${path}"; then
+                echo 'missing:' "${path}" 
+                count="$((count + 1))";
+            fi;
+        done < "${snap}.md5";
+        echo "Missing files: ${count}";
+    else
+        echo 'No checksums found';
+    fi;
+
+elif test "${1-}" = '-v'; then
+
+    test -n "${2-}" || err 'Need name of snapshot to verify against.';
+    name="$(basename "${2}")"
+
+    if test "${2}" = "${name}"; then
+        snap="${snapdir}/${name}"
+    else
+        warn 'Using snapshot created elsewhere'
+        snap="${2}";
+    fi;
+    if test -e "${snap}.md5"; then
+        echo 'Verify files against checksums...';
+        md5sum -c --quiet "${snap}.md5";
+    else
+        echo 'No checksums found';
+    fi;
+
+else
+    err 'Invalid.  For help, try `snapshot help`...';
+fi;

@@ -1,0 +1,57 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+
+# This uses the mirrorlist generator, see https://www.archlinux.org/mirrorlist/
+
+# Config
+url='https://www.archlinux.org/mirrorlist/?country=DE&protocol=https&ip_version=4&use_mirror_status=on';
+target='/etc/pacman.d/mirrorlist';
+
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+function ask_yN {
+    local answer='';
+    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer;
+    if test "${answer}" = y; then
+        info yes;
+        return 0;
+    fi;
+    info no;
+    return 1;
+}
+
+stamp="$(date +'%Y%m%d')";
+
+dir="$(dirname "$target")";
+tmp="$(mktemp -t pacman-mirrorlist.XXXXXXXXXXXXXXXX)";
+trap "rm '$tmp'" exit;
+
+info "Downloading mirrorlist: DE,https,ip4,on";
+curl "$url" >| "$tmp" || err 'Download failed';
+
+# silently overwrites today's other downloads
+cat <<EOF >| "$target.$stamp";
+# Mirrorlist created automatically
+# script: $0
+# url: $url
+EOF
+
+sed -rn 's/^#(Server\s*=.*)/\1/p' "$tmp" >> "$target.$stamp";
+
+chmod 644 "$target.$stamp";
+
+test -L "$target" && rm "$target" || mv "$target" "$target.bak-$stamp";
+ln -s "$target.$stamp" "$target";
+
+#info "Listing of $dir";
+#ls -ltr "$dir";
+#info "Head of $target";
+#head "$target";
+
+info 'Removing `mirrorlist.pacnew`';
+rm -f /etc/pacman.d/mirrorlist.pacnew;

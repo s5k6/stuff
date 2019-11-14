@@ -1,0 +1,9 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+img="$(mktemp -t screenshot.XXXXXXXXXX.png)";
+echo "Writing screenshot to: $img";
+
+imlib2_grab "$img";
+geeqie "$img";

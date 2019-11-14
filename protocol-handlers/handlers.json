@@ -1,0 +1,13 @@
+{
+  "defaultHandlersVersion": {"en-US": 4},
+  "mimeTypes": {"application/pdf": {"action": 3,"extensions": ["pdf"]}},
+  "schemes":  {
+    "geo":  {
+      "action": 2,
+      "handlers": [
+        {"name": "viking","path": "/home/sk/.local/bin/geo-viking"}
+      ],
+      "ask": false
+    }
+  }
+}

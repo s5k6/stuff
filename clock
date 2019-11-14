@@ -1,0 +1,27 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function str {
+    date +$'%A\n%Y %b %d\n\e[1;31m%H:%M %Z\e[m\n\e[36md %j, w %V\e[m'
+}
+
+if test "${to9ELRVOGngC-}" != 1; then
+    read rows cols < <(str | sed 's/'$'\e''\[[0-9;]*m//g' | wc -L -l)
+    to9ELRVOGngC=1 exec xterm \
+         -T clock \
+         -b 4 \
+         -fs 16 \
+         -uc -cr '#000001' \
+         -bg black -fg '#FFBF00' \
+         -geometry "${cols}x${rows}-0-0" \
+         -e "$0";
+fi
+
+until
+    clear
+    printf '%s' "$(str)"
+    read -n1 -t30 -s
+do
+    :
+done

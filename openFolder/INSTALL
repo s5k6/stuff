@@ -1,0 +1,59 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+# How to make Firefox launch a script when you click on "open
+# containing folder"?
+
+# You cannot do this!  What you can do, is to bind the MIME type
+# `inode/directory` to an XDG desktop file, which refers to your
+# script.  Now *all* appliactions relying on MIME types should run
+# that script.
+
+# I hate Firefox and Linux Desktop developers.  Linux Desktop really
+# sucks.  I'd love to see all idiots go back to Apple and Mindows,
+# where they came from.  Don't use Linux, please.
+
+# This is the script I want to use.  See there for docs.
+
+script=openFolder
+
+
+# Copy the script to somewhere in your `$PATH`, e.g., the first
+# writable component:
+if old="$(type -p "$script")"; then
+    echo "Replacing: $old";
+    cp "$script" "$old";
+else
+    echo $PATH | while read -d: p; do
+        if test -d "$p" -a -w "$p"; then
+            echo "Copying to ${p}/${script}";
+            cp "$script" "$p"
+            break
+        fi
+    done
+fi
+
+
+# Make a desktop entry, because that's how fucking XDG works.
+xdg="${HOME}/.local/share/applications/${script}.desktop";
+echo "Create XDG file: ${xdg}";
+
+mkdir -p "$(dirname ${xdg})";
+cat <<. >| "${xdg}"
+[Desktop Entry]
+Name=${script}
+Type=Application
+Comment=Developers of Linux desktop environments suck.
+Exec=${script}
+.
+
+
+# Associate `inode/directory` mime type with desktop entry.  This
+# probably modifies the file
+# `~/.local/share/applications/mimeapps.list`, but maybe the fuckers
+# have moved it around again.
+echo 'Setting MIME handler for inode/directory'
+xdg-mime default "${script}.desktop" inode/directory
+
+echo 'should be fine'

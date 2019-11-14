@@ -1,0 +1,32 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+function ask_yesNo {
+    local answer='';
+    read -p $'\e[34m'"$* [yes/"$'\e[1m'"no"$'\e[0;34m'"]"$'\e[m ' answer;
+    if test "${answer}" = yes; then
+        return 0;
+    fi;
+    info no;
+    return 1;
+}
+
+
+ask_yesNo "This will modify your git repo and manipulate history! Sure?"
+
+for i in "$@"; do
+    git filter-branch --force --index-filter \
+        "git rm -r --cached --ignore-unmatch '${i}'" \
+        --prune-empty --tag-name-filter cat -- --all
+done;
+
+git for-each-ref --format='delete %(refname)' refs/original | git update-ref --stdin
+
+git reflog expire --expire=now --all
+
+git gc --prune=now

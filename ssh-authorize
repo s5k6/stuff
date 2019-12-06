@@ -17,23 +17,65 @@ function ask_yN {
     return 1;
 }
 
-keylist="${HOME}/.ssh/ssh-authorize-list"
+sshdir="${HOME}/.ssh"
+keylist="${sshdir}/ssh-authorize-list"
 
-tgt="${1?'need user@host name'}";
+if test -z "${1-}"; then
+    cat <<EOF
+To copy all listed public keys into user@host:.ssh/authorized_keys,
+and correctly set the remote permissions, use
 
-if ! test -e "${keylist}"; then
-    (
-        echo '# List of keys to be sent to hosts you want to conect to';
-        ls ~/.ssh/*.pub;
-    ) > "${keylist}";
-    nano "${keylist}";
+    ssh-authorize [opts] user@host
+
+Options are passed to the ssh command after transformation:
+
+    -md5 ↦ -oFingerprintHash=md5
+
+List of keys in: ${keylist}
+EOF
+    exit;
 fi;
 
-mapfile -t keys < <(sed -En 's/#.*//;/^\s*$/d;/\.pub$/p' "${keylist}" | sort -u);
+sshArgs=()
+while test "${1:0:1}" = '-'; do
+    if test "${1}" = '-md5'; then
+        sshArgs+=('-oFingerprintHash=md5');
+        shift;
+    else
+        sshArgs+=("${1}");
+        shift
+    fi;
+    test -z "${1-}" && err 'Missing: user@host';
+done
 
-info "List of SSH keys: ${keylist}"
+
+if ! test -e "${keylist}"; then
+    echo '# List of keys to be sent to hosts you want to conect to' > "${keylist}";
+fi;
+
+mapfile -t keys < <(sed -E 's/#.*//; /^\s*$/d' "${keylist}" | sort -u);
+
+for i in "${!keys[@]}"; do
+    f="${HOME}/.ssh/${keys[$i]}";
+    if ! test -e "$f"; then
+        warn "Ignore non-existing ${f}";
+        unset "keys[${i}]";
+        continue;
+    fi;
+    if test "${f/.pub}.pub" != "${f}"; then
+        warn "Ignore non-.pub ${f}";
+        unset "keys[${i}]";
+    fi;
+done
+
+if test "${#keys[@]}" -lt 1; then
+    err "No valid keys listed in ${keylist}";
+fi;
+
 printf '%s\n' "${keys[@]}"
 
-ask_yN "Append these SSH keys to ${tgt}:~/.ssh/authorized_keys" || exit 0;
+( cd "${sshdir}"; cat "${keys[@]}" ) |
+    ssh "${sshArgs[@]}" "${1}" \
+        'mkdir -p .ssh; chmod 700 .ssh; cat >>.ssh/authorized_keys';
 
-cat "${keys[@]}" | ssh "$tgt" 'mkdir -p ~/.ssh; chmod 700 ~/.ssh; cat >>~/.ssh/authorized_keys';
+echo DONE;

@@ -1,0 +1,18 @@
+
+ControlMaster auto
+ControlPath ~/tmp/ssh-%r@%h:%p
+ControlPersist 180
+
+
+# === hosts ===
+
+# According to `https://superuser.com/questions/462535`, new X11
+# connections are disallowed after a timeout.  This can be changed by
+# adding `ForwardX11Timeout 0`.
+
+#Host alias
+#HostName real.name.or.ip
+#User username
+#ForwardX11 yes
+#ForwardX11Timeout 0
+#ForwardX11Trusted yes

@@ -1,0 +1,107 @@
+#!/usr/bin/python
+
+import sys, shlex
+
+
+def reader(fh):
+    '''Reads lines of the form `<indentation> <word>* <quotedstring>?`
+    from `fh`.  Yields the length of the indentation, the list of
+    words, and the quoted string or `None`.'''
+    
+    for line in fh:
+        line = line.rstrip()
+        l = len(line)
+        if l < 1:
+            continue
+        if line[0] == '#':
+            continue
+        line = line.strip()
+        indent = l - len(line)
+        words = shlex.split(line)  # quote-aware lexing
+
+        # check whether the last word was quoted
+        if line[-1] == '"':
+            yield (indent, words[:-1], words[-1])
+        else:
+            yield (indent, words, None)
+
+
+def reconstruct(reader):
+    '''From the tuples `(indent, path, quotedstr)` returned by `reader`,
+    create a stream of tuples `(path, terminal)`.'''
+
+    stack = [] # of "outer" indentations and paths
+    current = -1
+    path = []
+
+    for indent, ws, w in reader:
+        while indent <= current:
+            current, path = stack.pop()
+
+        if w is not None:
+            yield(path + ws, w)
+        else:
+            stack.append((current, path))
+            current = indent
+            path = path + ws  # Note: Using `+=` would modify `path`.
+
+
+def convert(fh):
+    '''Read lines from `fh` and print XCompose file to stdout.  Also
+    checks for duplicate definitions.'''
+
+    known = dict() # only here to check for duplicate definitions
+    for path, term in reconstruct(reader(fh)):
+        key = ' '.join(map(lambda k: '<' + k + '>', path))
+        if key in known:
+            print(
+                'Redefinition of {} to "{}", was "{}"'.format(
+                    key, known[key], term
+                ),
+                file = sys.stderr
+            )
+            exit(1)
+        known[key] = term
+        print(key, ':', '"' + term + '"')
+            
+
+            
+            
+def main(args):
+    if len(args) < 1:
+        print('''
+# Read `XCompose(3)` and then try `./generate | ./generate -` to see
+# how this tool helps you creating your own `~/.XCompose` file.
+        
+Multi_key
+    e x "∃"
+    f a "∀"
+    l
+        a "∧"
+        o "∨"
+        n "¬"
+        t "⊤"
+        b "⊥"
+
+# Note: The parser is fragile.  Comments must stand on their own
+lines.
+'''
+        )
+        exit(0)
+
+    if args[0] == '-':
+        convert(sys.stdin)
+    else:
+        with open(args[0], 'r') as fh:
+            convert(fh)
+                
+    return 0
+
+    
+
+if __name__ == '__main__':
+    try:
+        exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        print('KeyboardInterrupt')
+        exit(1)

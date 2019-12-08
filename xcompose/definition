@@ -11,6 +11,10 @@ Multi_key
         o "°"
         C "℃"
         F "℉"
+    O
+        r "®"
+        c "©"
+        l "🄯"
     s
         0 "∅"
         e "∈"
@@ -24,6 +28,7 @@ Multi_key
           less "⊆"
         greater "⊃"
         less "⊂"
+    t m "™"
     acute
         a "á"
         e "é"

@@ -7,7 +7,7 @@ def reader(fh):
     '''Reads lines of the form `<indentation> <word>* <quotedstring>?`
     from `fh`.  Yields the length of the indentation, the list of
     words, and the quoted string or `None`.'''
-    
+
     for line in fh:
         line = line.rstrip()
         l = len(line)
@@ -63,41 +63,18 @@ def convert(fh):
             exit(1)
         known[key] = term
         print(key, ':', '"' + term + '"')
-            
 
-            
-            
+
 def main(args):
     if len(args) < 1:
-        print('''
-# Read `XCompose(3)` and then try `./generate | ./generate -` to see
-# how this tool helps you creating your own `~/.XCompose` file.
-        
-Multi_key
-    e x "∃"
-    f a "∀"
-    l
-        a "∧"
-        o "∨"
-        n "¬"
-        t "⊤"
-        b "⊥"
+        print('Use: ./generate definition > ~/.XCompose')
+        return 0
 
-# Note: The parser is fragile.  Comments must stand on their own
-lines.
-'''
-        )
-        exit(0)
+    with open(args[0], 'r') as fh:
+        convert(fh)
 
-    if args[0] == '-':
-        convert(sys.stdin)
-    else:
-        with open(args[0], 'r') as fh:
-            convert(fh)
-                
     return 0
 
-    
 
 if __name__ == '__main__':
     try:

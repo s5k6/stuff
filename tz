@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# tz --- leery tar+gzip+bzip2+lzma frontend
+# tz --- leery tar and compressor frontend
 # Copyright 2008 Stefan Klinger <http://stefan-klinger.de>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
 
 set -u;
 
-version='2019-Sept-3'; # prevoius version was 2013-Jan-13 !!!
+version='2020-Jan-5';
 
 
 
@@ -31,7 +31,7 @@ function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
 
 
 
-# Prompt the user, and wait for 'yes' or 'no'.
+# Prompt the user and wait for 'yes' or 'no'.
 
 function askYesNo { # args: <Question string>
   while read -p $'\e[34m'"$* [yes/no] "$'\e[m' answer; do
@@ -44,7 +44,7 @@ function askYesNo { # args: <Question string>
 
 
 
-# Ask before overwriting a file, and remove it if so.
+# Ask before overwriting a file and remove it if so.
 
 function overwrite { # args: <filename>
     test -e "$1" || return 0;
@@ -176,7 +176,8 @@ if test -z "${1:-}"; then
 Name
 ====
 
-\`tz\` — a leery frontend to tar, gzip, bzip2, lzma, xz, and zip.
+\`tz\` — a leery frontend to tar, gzip, bzip2, lzma, xz, zstd and the
+         odd one, zip.
 
 Version ${version}
 
@@ -184,8 +185,8 @@ Version ${version}
 Synopsis
 ========
 
-    tz                                # this help, markdown format
-    tz [-g|-b|-l|-x|-z] ‹arg›...      # do work
+    tz                                  # this help, markdown format
+    tz [-g|-b|-l|-x|-z|-s] ‹arg›...     # do work
 
 Compress or extract the passed arguments using the right tools, while
 not accidentally overwriting files or mixing archive contents.
@@ -198,33 +199,34 @@ Each argument is processed on its own, with the latest given options in
 effect.
 
 If ‹arg› is a directory, it is tar'ed and then compressed using either
-gzip (-g), bzip2 (-b), lzma (-l), or xz (-x), defaulting to ${zip}.  If
--z is given, the directory is zipped, no tar involved.  All compression
-tasks following on the command line are affected by choosing a
-compressor.
+gzip (-g), bzip2 (-b), lzma (-l), xz (-x) or zstd (-s), defaulting to
+${zip}.  If -z is given, the directory is zipped, no tar involved.
+All compression tasks following on the command line are affected by
+choosing a compressor.
 
 If ‹arg› is a file, the action taken is determined by its suffix:
 
-  \`.tar.(xz|lzma|bz2|gz)\`, or \`.t(xz|lz|b2|bz|gz)\`
+  \`.tar.(xz|lzma|bz2|gz|zst)\` or \`.t(xz|lz|b2|bz|gz)\`
   ~   Extract the compressed tar archive, enforcing secure naming
       conventions (see "Security" below).
 
-  \`.xz\`, \`.lzma\`, \`.bz2\`, or \`.gz\`
+  \`.xz\`, \`.lzma\`, \`.bz2\`, \`.zst\` or \`.gz\`
   ~   Extract the file using the usual naming conventions, i.e.,
       \`foo.gz\` goes to \`foo\`.
 
   \`.zip\`
   ~   Extract the contents, enforcing secure naming conventions, figure
-      out whether it was a file, a directory, or a collection of items,
+      out whether it was a file, a directory or a collection of items,
       and rearrange accordingly.
 
   Other files
-  ~   are compressed using either gzip, bzip2, lzma, xz, or zip, as
-      choosen with aforementioned options.
+  ~   are compressed using either gzip, bzip2, lzma, xz, zstd or zip,
+      as choosen with aforementioned options.
 
 In either case, the original file(s) will be left intact.  Output is
-always in the current directory.  If the argument contains slashes, the
-last component of the path is used to determine the name to be created.
+always in the current directory.  If the argument contains slashes,
+the last component of the path is used to determine the name to be
+created.
 
 
 Security
@@ -234,14 +236,14 @@ Security
 decide to overwrite any file or directory, the victim in question will
 be removed first.  Hence, it is impossible to extract from an archive
 into a directory while keeping the files therein.  This is an intended
-feature, since it avoids mixing data from two archives, and matches my
-most common usecase.
+feature, since it avoids mixing data from two archives and matches my
+most common use case.
 
 All archives are required to put their contents into a directory whose
 name matches the name of the archive.  I.e., all the files in
 \`foo.tar.bz2\` must belong to a top level directory \`foo\`.  To enforce
 this, \`tz\` will, as an intermediate step, do all extracting below a
-newly created temporary directory in your current path, and rearrange
+newly created temporary directory in your current path and rearrange
 the contents later on, if safe to do so.  This matches the
 recommendations for untrusted archives given in the tar documentation.
 
@@ -297,6 +299,10 @@ while test "${1:-}"; do
                 echo 'Using xz for compression';
                 zip='xz'; ext='xz';;
 
+            -s)
+                echo 'Using zstd for compression';
+                zip='zstd'; ext='zst';;
+
             -z)
                 echo 'Using zip for compression and archive generation';
                 zip='zip'; ext='zip';;
@@ -336,6 +342,9 @@ while test "${1:-}"; do
             *.tar.xz) doUnzipArch "$1" unxz "$(basename "$1" .tar.xz)";;
             *.txz) doUnzipArch "$1" unxz "$(basename "$1" .txz)";;
 
+            # extract and untar zstd'ed tar archives
+            *.tar.zst) doUnzipArch "$1" unzstd "$(basename "$1" .tar.zst)";;
+
             # extract bzip2'ed files
             *.bz2) doUnzipFile "$1" bunzip2 "$(basename "$1" .bz2)";;
 
@@ -347,6 +356,9 @@ while test "${1:-}"; do
 
             # extract xz'ed files
             *.xz) doUnzipFile "$1" unxz "$(basename "$1" .xz)";;
+
+            # extract xz'ed files
+            *.zst) doUnzipFile "$1" unzstd "$(basename "$1" .zst)";;
 
             # extract zip archives
             *.zip) doUnzipArch "$1" unzip "$(basename "$1" .zip)";;

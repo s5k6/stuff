@@ -21,5 +21,8 @@ test -f "${1:-}" || err 'Need file argument'
 ask_yN 'In-place delete of training whitespace?' || exit 0;
 
 for i in "$@"; do
-    sed -r -i 's/\s+$//' "$i";
+    if test -f "${i}" -a -w "${i}";
+    then sed -r -i 's/\s+$//' "${i}";
+    else warn "Not a writable file: ${i}";
+    fi;
 done

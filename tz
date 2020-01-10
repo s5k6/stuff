@@ -15,7 +15,7 @@
 
 set -u;
 
-version='2020-Jan-5';
+version='2020-Jan-10';
 
 
 
@@ -55,14 +55,6 @@ function overwrite { # args: <filename>
 
 
 
-# Fails if the passed command is not executable.
-
-function avail { # args: <tool>
-  type -p "$1" > /dev/null || error "Required tool '${1}' is not installed."
-}
-
-
-
 # Removes list of files, used by 'trap _ exit'
 
 function cleanup { # args: <filename>*
@@ -75,8 +67,6 @@ function cleanup { # args: <filename>*
 # Decompress an archive.
 
 function doUnzipArch { # args: <source> <unzipper> <target>
-  avail "$2";
-  test "$2" = 'unzip' || avail tar;
   if overwrite "$3"; then
     tmp="$(mktemp -d "${3}.XXXXXXXXXX")" || error "mktemp failed.";
     trap "cleanup '${3}' '${tmp}'" exit;
@@ -114,15 +104,13 @@ function doUnzipArch { # args: <source> <unzipper> <target>
 # Compress a directory.
 
 function doZipDir { # args: <source> <zipper> <target>
-  avail "$2";
-  test "$2" = 'zip' || avail tar;
   if overwrite "$3"; then
     trap "cleanup '${3}'" exit;
     echo "Compressing into: '${3}'";
     if test "$2" = 'zip'; then
         zip -r "$3" "$1" || error 'FAILED';
     else
-        tar -C "$(dirname ${1})" -c "$(basename ${1})" | "${2}" -9 > "$3" || error 'FAILED';
+        tar -C "$(dirname ${1})" -c "$(basename ${1})" | eval "${2}" > "$3" || error 'FAILED';
     fi;
     trap - exit;
   else
@@ -135,11 +123,10 @@ function doZipDir { # args: <source> <zipper> <target>
 # Decompress a file.
 
 function doUnzipFile { # args: <source> <unzipper> <target>
-  avail "$2";
   if overwrite "$3"; then
     trap "cleanup '${3}'" exit;
     echo "Extracting";
-    cat "$1" | "$2" > "$3" || error " FAILED";
+    cat "$1" | eval "$2" > "$3" || error " FAILED";
     trap - exit;
   else
     skip+=("${1}");
@@ -151,14 +138,13 @@ function doUnzipFile { # args: <source> <unzipper> <target>
 # Compress a file
 
 function doZipFile { # args: <source> <zipper> <target>
-  avail "$2";
   if overwrite "$3"; then
     trap "cleanup '${3}'" exit;
     echo "Compressing into: '${3}'";
     if test "$2" = 'zip'; then
         zip "$3" "$1" || error 'FAILED';
     else
-        cat "$1" | eval "${2}" -9 > "$3" || error ' FAILED';
+        cat "$1" | eval "${2}" > "$3" || error ' FAILED';
     fi;
     trap - exit;
   else
@@ -266,9 +252,6 @@ daisies=();
 # List of sources not processed on user intervention.
 skip=();
 
-# make sure some basic tools are available
-avail sed;
-
 
 
 if test -r "${HOME}/.tzrc"; then
@@ -285,23 +268,23 @@ while test "${1:-}"; do
 
             -b)
                 echo "Using bzip2 for compression.";
-                zip='bzip2'; ext='bz2';;
+                zip='bzip2 -9'; ext='bz2';;
 
             -g)
                 echo "Using gzip for compression.";
-                zip='gzip'; ext='gz';;
+                zip='gzip -9'; ext='gz';;
 
             -l)
                 echo 'Using lzma for compression';
-                zip='lzma'; ext='lzma';;
+                zip='lzma -9'; ext='lzma';;
 
             -x)
                 echo 'Using xz for compression';
-                zip='xz'; ext='xz';;
+                zip='xz -9'; ext='xz';;
 
             -s)
                 echo 'Using zstd for compression';
-                zip='zstd'; ext='zst';;
+                zip='zstd -9 --long=31 -T0'; ext='zst';;
 
             -z)
                 echo 'Using zip for compression and archive generation';
@@ -343,7 +326,7 @@ while test "${1:-}"; do
             *.txz) doUnzipArch "$1" unxz "$(basename "$1" .txz)";;
 
             # extract and untar zstd'ed tar archives
-            *.tar.zst) doUnzipArch "$1" unzstd "$(basename "$1" .tar.zst)";;
+            *.tar.zst) doUnzipArch "$1" 'unzstd --long=31' "$(basename "$1" .tar.zst)";;
 
             # extract bzip2'ed files
             *.bz2) doUnzipFile "$1" bunzip2 "$(basename "$1" .bz2)";;
@@ -357,8 +340,8 @@ while test "${1:-}"; do
             # extract xz'ed files
             *.xz) doUnzipFile "$1" unxz "$(basename "$1" .xz)";;
 
-            # extract xz'ed files
-            *.zst) doUnzipFile "$1" unzstd "$(basename "$1" .zst)";;
+            # extract zstd'ed files
+            *.zst) doUnzipFile "$1" 'unzstd --long=31' "$(basename "$1" .zst)";;
 
             # extract zip archives
             *.zip) doUnzipArch "$1" unzip "$(basename "$1" .zip)";;

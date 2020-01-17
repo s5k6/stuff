@@ -1,0 +1,50 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+dirs=()
+cmd=()
+args=( "${@}" )
+
+# split arguments at `--`
+for (( i = 0; i < "${#args[@]}"; i++ )); do
+    if test "${args[$i]}" = '--'; then
+        dirs=( "${args[@]:0:i}" );
+        cmd=( "${args[@]:i+1}" );
+        break;
+    fi;
+done;
+
+# no dirs?  use all!
+if test "${#dirs[@]}" -lt 1; then
+    dirs=(*/);
+    cmd=( "${@}" )
+fi;
+
+# no command?  need help!
+if test "${#cmd[@]}" -lt 1; then
+    cat <<EOF
+Synopsis
+
+    all [DIRECTORY... --] COMMAND...
+
+Non-recursively perform COMMAND in each DIRECTORY if specified, or in
+all directories in the PWD.
+
+EOF
+    exit;
+fi;
+
+for i in "${dirs[@]}"; do
+    if ! test -d "$i"; then
+        warn "=== ${i} === NOT A DIRECTORY ===";
+        continue
+    fi;
+    info "=== ${i} ==="
+    env -C "$i" "${cmd[@]}";
+done
+

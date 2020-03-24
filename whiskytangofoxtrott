@@ -1,0 +1,85 @@
+#!/usr/bin/python
+
+import sys
+
+mapping = {
+    "de": {
+        "A": "Anton",
+        "B": "Boris",
+        "C": "Charly",
+        "D": "Dieter",
+        "E": "Erwin",
+        "F": "Franz",
+        "G": "Gustav",
+        "H": "Heinrich",
+        "I": "Ingo",
+        "J": "Jakob",
+        "K": "Karl",
+        "L": "Ludwig",
+        "M": "Michael",
+        "N": "Norbert",
+        "O": "Otto",
+        "P": "Paul",
+        "Q": "Quentin",
+        "R": "Richard",
+        "S": "Samuel",
+        "T": "Theodor",
+        "U": "Ulrich",
+        "V": "Viktor",
+        "W": "Wilhelm",
+        "X": "Xaver",
+        "Y": "großes Y",
+        "Z": "Zacharias",
+        "a": "Anna",
+        "b": "Barbara",
+        "c": "Christina",
+        "d": "Daniela",
+        "e": "Emma",
+        "f": "Fiona",
+        "g": "Greta",
+        "h": "Helena",
+        "i": "Isabella",
+        "j": "Julia",
+        "k": "Katarina",
+        "l": "Linda",
+        "m": "Marianne",
+        "n": "Nina",
+        "o": "Ophelia",
+        "p": "Patrizia",
+        "q": "kleines Q",
+        "r": "Rosa",
+        "s": "Sophia",
+        "t": "Tanja",
+        "u": "Ulrike ",
+        "v": "Vanessa",
+        "w": "Waltraud",
+        "x": "Xenia",
+        "y": "Yvonne",
+        "z": "Zora"
+    }
+}
+
+def main(argv):
+    m = mapping["de"]
+    step = 4
+
+    for line in sys.stdin:
+        line = line.strip()
+        print("# {}".format("_" * max(20, min(70, len(line)))))
+        print("# {}".format(line))
+        count = 0
+        for c in line:
+            if count % step == 0:
+                print()
+            print("\t{}\t{}".format(c, m.get(c, "‹{}›".format(c))))
+            count += 1
+        print()
+        print("# {} characters".format(count))
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv)
+    except KeyboardInterrupt:
+        print('Interrupted')
+        exit(1)

@@ -1,0 +1,64 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+
+
+function jsGetIp6 {
+    cat <<EOF || err failed to get IPv6 address
+Array.prototype.flat = function() { return [].concat(...this); }
+txt=''; while (l = readline()) txt += l
+o = JSON.parse(txt)
+r = o.filter(x => x.link_type == "ether")
+     .map(x => x.addr_info)
+     .flat()
+     .filter(x => x.family == "inet6" && x.scope == "global")
+     .map(x => x.local)
+     [0]
+if (typeof r == 'undefined') { printErr("nothing found"); quit(1) }
+//print(JSON.stringify(r))
+print(r)
+EOF
+}
+
+
+
+if test "${1-}" = on; then
+
+    ip4='0.0.0.0'
+    ip6="$(ip -j addr | js60 -f <(jsGetIp6))"
+    source ~/.dyndns_call
+    
+elif test "${1-}" = off; then
+
+    ip4='127.0.0.1'
+    ip6='::1'
+    source ~/.dyndns_call
+
+elif test "${1-}" = mkScript; then
+
+    cat >~/.dyndns_call <<'f1Dbp12RM2Gl'
+#!/bin/bash
+echo "Review file ~/.dyndns_call"; exit 1
+curl -K - <<EOF
+user = "USERNAME:PASSWORD"
+url = "https://dyndns.example.com/nic/update?myip=${ip4?}&myipv6=${ip6?}"
+EOF
+echo
+f1Dbp12RM2Gl
+    warn 'Review file ~/.dyndns_call'
+
+else
+    cat <<'EOF'
+Usage:
+
+    dyndns on       # switch on DynDNS
+    dyndns off      # switch off DynDNS
+    dyndns mkScript # draft .dyndns_call
+
+EOF
+fi;

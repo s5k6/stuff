@@ -3,7 +3,12 @@ set -u -e -C;
 shopt -s nullglob;
 
 function str {
-    date +$'%A\n%Y %b %d\n\e[1;31m%H:%M %Z\e[m\n\e[36md %j, w %V\e[m'
+    #date +$'%A, %Y %b %d\n\e[1;31m%H:%M %Z\e[m\n\e[36md %j, w %V\e[m'
+    date +$'%A, %Y %b %d\n\e[1;31m%H:%M %Z\e[m'
+    (
+        cd '/sys/class/power_supply/BAT0';
+        echo -en "\e[32m$(($(<charge_now) * 100 / $(<charge_full) )) $(<capacity_level) $(<status)\e[m\n"
+    )
 }
 
 if test "${to9ELRVOGngC-}" != 1; then

@@ -1,0 +1,35 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+function ask_yN {
+    local answer='';
+    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer;
+    if test "${answer}" = y; then
+        info yes;
+        return 0;
+    fi;
+    info no;
+    return 1;
+}
+
+dir="$(mktemp -t -d screenocr.XXXXXX)"
+trap "rm -rf '${dir}'" EXIT
+
+while
+    read -r X Y W H G ID < <(slop -f "%x %y %w %h %g %i" 2>/dev/null; echo)
+do
+    echo "${W}x${H}+${X}+${Y}"
+
+    imlib2_grab "${dir}/screen.png" || err grab
+    convert "${dir}/screen.png" -crop "${W}x${H}+${X}+${Y}" "${dir}/crop.pnm" || err crop
+    
+    clear
+    tesseract "${dir}/crop.pnm" - | tee "${dir}/text.txt"
+done
+
+e "${dir}/text.txt"

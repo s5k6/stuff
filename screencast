@@ -17,7 +17,7 @@ function ask_yN {
     return 1;
 }
 
-mov="$(mktemp -t screencast.XXXXXXXXXX.mp4)";
+mov="$(mktemp -t screencast.$(date +%s).XXXXXX.mp4)";
 
 trap "info 'Recorded into ${mov}'" EXIT;
 

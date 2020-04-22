@@ -1,0 +1,6 @@
+#!/bin/bash
+set -u -e -C;
+
+until ssh -oConnectTimeout=3 "$1" true 2>&1; do sleep 3; done | uniq
+clear
+ssh "$1"

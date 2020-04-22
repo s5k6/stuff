@@ -1,15 +1,15 @@
 #!/bin/bash
-
 set -u;
 
-opt='';
+# This needs `less` to fail when `r` is hit.  To set this up, do
+#
+#     $ lesskey - <<<'r quit 1'
+
+opt=();
 
 while test "${1:0:1}" = '-'; do
-    opt="${opt} '${1}'";
+    opt+=("${1}");
     shift;
 done;
 
-
-until "$@" | eval "less -S ${opt}"; do
-    :
-done;
+until "$@" | less -S "${opt[@]}"; do :; done

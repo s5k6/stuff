@@ -17,7 +17,7 @@ function ask_yN {
     return 1;
 }
 
-name="$(basename "${1}" .zip)"
+name="${1%.7z}"
 
 tmp="$(mktemp -d "${name}.XXXXXXXX")"
 info "Temporary location: ${tmp}"

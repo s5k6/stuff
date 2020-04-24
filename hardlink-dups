@@ -1,0 +1,251 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob;
+
+# Author: Stefan Klinger <https://stefan-klinger.de/>
+# License: GNU GPL
+# Source: https://github.com/s5k6/stuff
+
+# Feature: Verify that an existing sum is correct, i.e., that
+#
+#    sum(open(pathToFile)) == basename(pathToFile)
+#
+# holds.  This is a verification step that is not currently
+# implemented.
+
+# Feature: Maybe it would make sense to split the directory containing
+# the hashes into a two-level directory to reduce the number of
+# entries per directory.  The file
+#
+#    /path/to/hashes/1d8eb1d5cb439cdc17d74e9f448bbe32
+#
+# would be stored as
+#
+#    /path/to/hashes/1d/8eb1d5cb439cdc17d74e9f448bbe32
+#
+# instead.  I think git does something similar, check out any
+# `.git/objects` directory.
+
+
+
+# file descriptor for logging
+exec 6>/dev/null;
+
+function err {
+    echo "[ERROR] $@" >&6;
+    echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1;
+}
+function warn {
+    echo "[warning] $@" >&6;
+    echo $'\e[1;35m'"$@"$'\e[m' >&2;
+}
+function info {
+    echo "[info] $@" >&6;
+    echo $'\e[36m'"$@"$'\e[m';
+}
+
+# help if no arguments
+if test -z "${1-}"; then
+    cat <<'EOF'
+Synopsis
+
+    hardlink-dups MAP -- DIRS...
+
+Description
+
+    Replace identical files in `DIRS` with shared hard links.  This
+    reduces redundant storage of identical file content under
+    different paths.
+
+    This tool calculates a checksum `s` of each file `f` in `DIRS`,
+    and creates a hardlink named `MAP/s` of `f`.  However, if such a
+    link already exists *and* has identical contents, then `f` is
+    replaced with a hardlink of `MAP/s` instead.  Hash collisions are
+    handled by using a directory `MAP/s/` instead.
+
+    It is possible and intended to run this tool with different `DIRS`
+    on a `MAP` created by a previous run.  Duplicates in the new
+    `DIRS` will become hardlinks to the existing MAP and thus share
+    the underlying inode with all previously added `DIRS`.
+
+    The directory `MAP` will be created if it does not exist, or it
+    must contain exclusively a hashmap as created previously by this
+    tool.
+
+Example
+
+    The following lines show the output of `df` before and after
+    deduplication:
+
+        Filesystem    Size  Used Avail Use% Mounted on
+        /dev/sdc1     229G  216G  1.9G 100% /tmp/mount.TavCqCzc
+        /dev/sdc1     229G  138G   80G  64% /tmp/mount.TavCqCzc
+
+    The backup device contained three incremental `rsync`-style
+    backups, where a large amount of data was in files that have been
+    moved but not changed between increments.
+
+Cleanup
+
+    To remove exactly those files from the `MAP` that have no other
+    references, use
+
+        find MAP -xdev -type f -links 1 -not -name .hardlink-dups \
+        -not -name log -delete -print
+
+Important Notes
+
+    Hardlinked files cannot be edited independently any more.
+
+    Mapping two path names to the same inode makes them share the same
+    ownership and permissions.  If a file outside the MAP is replaced
+    by a known one, the metadata of the newer one takes precedence.
+
+    Files in `DIRS` will loose all hardlinks to files neither in
+    `DIRS` nor in `MAP`, i.e, you may break existing hardlinks on your
+    system.
+
+EOF
+    exit 0;
+fi;
+
+
+cache="$1";
+test "x$2" = 'x--' || err 'Invalid CLI syntax.';
+shift 2;
+dirs=("$@");
+
+
+# Note hash algo in MAP.  Opportunity to support others later on.
+if test -d "$cache"; then
+    grep -q -s md5 "${cache}/.hardlink-dups" || err 'This is not a valid cache';
+else
+    mkdir -p "$cache";
+    echo 'md5' >"${cache}/.hardlink-dups";
+fi;
+
+
+
+# Display a warning
+if ! pwd | grep -q /home/sk/prg/tools/util; then
+    cat <<'EOF'
+
+WARNING!  This script will deduplicate files with identical content by
+hard-linking.  After that:
+
+  * modifying any of two (or more) linked files will modify the other
+    one(s) as well,
+
+  * processed files will loose all hardlinks to external files, and
+
+  * all linked files will have assigned the metadata (ownership, mode,
+    etc.) of the newest amongst them.
+
+This is only useful to compact backups that will never be modified!
+
+EOF
+    echo $'\e[1;31mDo not use this tool unless you fully understand the consequences.'
+    echo $'\e[m\nRead above warning.  Contemplate...'
+
+    # insist that the reader reads this!
+    if read -t7 -s -n1; then
+        err 'You cannot have read this that fast.  Try again.'
+    fi;
+    read -p $'\e[34mType "YES" if you really want to continue:\e[m ' answer;
+    test "$answer" = YES || exit 1;
+fi;
+
+
+
+dev="$(stat -c%D "$cache")";
+
+log="${cache}/log";
+exec 6>>"$log";
+info "start $(date)";
+
+
+echo 'Reading hashes...'
+known=()
+while read -d $'\0' id path; do
+    known["$id"]="$path";
+done < <(find "${cache}" -xdev -type f \( -name log -prune -o -name .hardlink-dups -prune -o -printf '%i %P\0' \) );
+echo "Found ${#known[@]}".
+echo "Created dictionary of ${#known[@]} known inodes -> hashes" >&6;
+
+declare -i already=0 denied=0 collisions=0 linked=0 new=0
+
+while read -r -d $'\0' fn; do
+    rp="$(realpath "$fn")"; # real path
+    ino="$(stat -c%i "$rp")" # inode
+    
+    test -s "$rp" || continue; # skip empty files
+
+    echo -n "${fn} "; # no newline!
+
+    if test "${known[$ino]-}"; then
+        echo '[Already shared]';
+        already+=1;
+        continue;
+    fi
+
+    if ! test -r "$fn"; then
+        echo '[Denied]'
+        denied+=1;
+        warn "Cannot read: $fn";
+        continue;
+    fi;
+    
+    sum="$(openssl dgst -md5 "$rp")";
+    sum="${sum##* }";
+    cs="${cache}/${sum}";   # cache path
+    fs="$(stat -c%s "$rp")";
+
+    if test -e "$cs"; then # the hash is already present at target
+                    
+        if test "$cs" -ef "$rp"; then # already linked
+            # Same file, but not in the `known` array!
+            err 'internal error';
+            exit 1;
+            
+        elif test -d "$cs"; then # there have been collisions already
+            echo '[New collision]';
+            collisions+=1;
+            path="${cs}/$(mktemp -u XXXXXXXXXX)";
+            known["$ino"]="$path";
+            ln "$rp" "$path" || warn "Linking failed: $rp";
+            
+        elif test "$fs" = "$(stat -c%s "$cs")" && cmp -s "$rp" "$cs"; then
+            echo '[Linking]';
+            linked+=1;
+
+            # update metadata if external file is newer than cached one
+            if test "$rp" -nt "$cs"; then
+                chmod --reference="$rp"         "$cs";
+                chown "$(stat -c'%u:%g' "$rp")" "$cs";
+            fi;
+            # replace original with link
+            chmod +w "$(dirname "$rp")";
+            ln -f "$cs" "$rp" || warn "Linking failed: $rp";
+            
+        else
+            echo '[Collision]';
+            collisions+=1;
+            cd="$(mktemp -d "${cache}/collision.XXXXXXXXXX")";
+            mv "$cs" "${cd}/$(mktemp -u XXXXXXXXXX)";
+            mv "$cd" "$cs";            
+            ln "$rp" "${cs}/$(mktemp -u XXXXXXXXXX)" || err 'Linking failed';
+
+        fi;
+        
+    else # new entry
+        
+        echo '[New]';
+        new+=1;
+        known["$ino"]="$cs";
+        ln "$rp" "$cs" || warn "Linking failed: $rp";
+        
+    fi;
+done < <(find "${dirs[@]}" -xdev -type f -print0 2>&6);
+
+
+info "done $(date), ${already} already known, ${denied} access denied, ${collisions} collisions, ${linked} linked to existing, ${new} newly added."

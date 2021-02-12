@@ -32,7 +32,7 @@ tmp="$(mktemp -t pacman-mirrorlist.XXXXXXXXXXXXXXXX)";
 trap "rm '$tmp'" exit;
 
 info "Downloading mirrorlist: DE,https,ip4,on";
-curl "$url" >| "$tmp" || err 'Download failed';
+curl -L "$url" >| "$tmp" || err 'Download failed';
 
 # silently overwrites today's other downloads
 cat <<EOF >| "$target.$stamp";

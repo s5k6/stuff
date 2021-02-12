@@ -1,0 +1,19 @@
+#!/bin/bash
+set -u -C
+shopt -s nullglob
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m' >&2; }
+
+trap : SIGINT
+
+status=0
+while sleep 0.5; do
+    warn 'Hit ^C to restart, hit twice to exit'
+    "$@"
+    status="$?"
+    info "Exit status was ${status}"
+    test "${status}" != 130 && exit "${status}"
+done
+exit 130

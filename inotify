@@ -40,6 +40,7 @@ for (( i = 0; i < "${#args[@]}"; i++ )); do
     if test "${args[$i]}" = '--'; then
         files=( "${args[@]:0:$i}" )
         cmd=( "${args[@]:$((i+1))}" )
+        break
     fi;
 done;
 

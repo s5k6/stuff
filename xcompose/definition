@@ -9,6 +9,8 @@ Multi_key
         b "⊥"
     o
         o "°"
+        C "℃"
+        F "℉"
     O
         r "®"
         c "©"
@@ -41,7 +43,10 @@ Multi_key
         p e a c e semicolon "☮"
         p e a c h semicolon "🍑"
         s k u l l semicolon "☠"
+        p e a c e semicolon "☮"
         y e s semicolon "✓"
+        n o semicolon "✗"
+        b i o semicolon "☣"
     apostrophe
         apostrophe "‘’"
         a "á"

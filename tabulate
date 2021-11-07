@@ -2,52 +2,190 @@
 
 import sys
 
-def main():
-                
-    if len(sys.argv) > 2:
-        def withHeader(a):
-            print('==>', a, '<==') # like `head`(1)
-            with open(a, 'tr') as fh:
-                tabulate(fh)
-                
-        withHeader(sys.argv[1]) # newlines between, but not before/after
-        for a in sys.argv[2:]:
-            print()
-            withHeader(a)
 
-    elif len(sys.argv) > 1:
-        with open(sys.argv[1], 'tr') as fh:
-            tabulate(fh)
-                
-    else:
-        tabulate(sys.stdin)    
 
-def tabulate(fh):
+def showHelp():
+    print('''
+Nicely arrange tab-separated columns
 
-    lines = []
-    widths = []
-    cols = 0
+    tabulate [options and files]
+
+Options
+
+    -l, -r
+        Align column left or right respectively.  Multiple options
+        apply to consecutive columns.  Multiple columns may be
+        specified in one argument.  The last one is used for all
+        remaining columns.  E.g., `-rlrrl` will arrange the 1st, 3rd
+        and 4th column to the right, all others to the left.
+
+    -noseek
+        Do not seek to read the file a second time.  This requires
+        in-memory storage of the entire input.  `tabulate` does this
+        outomatically for streams, but you may enforce it for files as
+        well.
+
+        **Be careful**, this option implies severe memory overhead!
+
+A file can be `-` to designate stdin.  If options but no files are
+given, stdin is used.  All options take effect on all files.
+'''
+    )
+
+
+
+def iterLines(fh):
     for line in fh:
         line = line.rstrip('\n')
-        words = line.split('\t')
-        lines.append(words)
-        cols = max(cols, len(words))
-        widths = [
-            max(a, b)
-            for (a, b) in zip(
-                    widths + [0]*cols,
-                    [len(w) for w in words] + [0]*cols
-            )
-        ]
-    #print(cols, widths)
+        yield line  # see Note 1
 
-    fmt = ' '.join(['{:' + str(w) + '}' for w in widths[:cols]])
-    #print(cols, fmt)
 
-    for line in lines:
-        line = line + list(('',)*cols)
-        print(fmt.format(*line))
+
+def tabulate(fh, alignments, seekable):
+
+    lines = []
+    colWidths = []
+    colCount = 0
+
+    for line in iterLines(fh):
+        if not seekable:
+            lines.append(line)
+
+        words = line.split('\t')  # see Note 1
+
+        wordCount = len(words)
+        wordWidths = list(map(len, words))
+        colWidths = (
+            list(map(max, colWidths, wordWidths))
+            +
+            colWidths[wordCount:]
+            +
+            wordWidths[colCount:]
+        )
+        colCount = max(colCount, wordCount) # update after use for colWidths
+
+    #print(colCount, colWidths)
+
+    alignments2 = (
+        alignments
+        +
+        alignments[-1:] * (colCount - len(alignments))
+    )
+
+    def align(width, word, al):
+        pad = (' ' * (width - len(word)))
+        if al == 'l':
+            w = '\033[m' + word + '\033[4;37m' + pad
+        else:
+            w = '\033[4;37m' + pad + '\033[m' + word
+        return w
+
+    def printLine(words):
+        print(
+            '\033[0;33m→'.join(map(align, colWidths, words, alignments2)),
+            end = '\033[0;35m↲\033[m\n'
+        )
+
+    if seekable:
+        fh.seek(0)
+        for line in iterLines(fh):
+            printLine(line.split('\t'))  # see Note 1
+    else:
+        for line in lines:
+            printLine(line.split('\t'))  # see Note 1
+
+
+
+def main(argv):
+
+    if len(argv) == 1:
+        showHelp()
+        return 0
+
+    alignments = 'l'
+    tabulatedSomething = False
+    allowSeek = True
+    showHead = False
+
+    files = []
+
+    for a in argv[1:]:
+        if a[0:1] == '-':
+
+            if a[1:2] == 'l' or a[1:2] == 'r':
+                alignments += a[1:]
+
+            elif a[1:] == 'noseek':
+                allowSeek = False
+
+            elif a[1:] == '':
+                if '' in files:
+                    print('Cannot use stdin twice.')
+                    return 1
+                files.append('')
+
+            else:
+                print("Do not understand: " + a)
+                return 1
+
+        else:
+            files.append(a)
+
+    if files == []:
+        tabulate(sys.stdin, alignments, False)
+        return 0
+
+    for f in files:
+        if f == '':
+            tabulate(sys.stdin, alignments, False)
+        else:
+            with open(f, 'tr') as fh:
+                tabulate(fh, alignments, fh.seekable() and allowSeek)
+
+
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        exit(main(sys.argv))
+    except BrokenPipeError:
+        pass
+
+
+
+# Note 1: Initially, I've split the lines into words, and stored the
+# lists of words if seeking was unavailable.  `iterLines` would thus
+# yield lists of words.  This, however, had a major memory impact:
+#
+#     $ l ~/tmp/large
+#     -rw------- 1 sk sk 33M Jul  9 17:00 /home/sk/tmp/large
+#
+#     $ wc -l ~/tmp/large
+#     720896 /home/sk/tmp/large
+#
+#     $ time ./tabulate -noseek ~/tmp/large >/dev/null
+#     usr=8.59s ker=0.26s rss=459728kB
+#
+# Now, instead, I store unsplit lines, and split them once when
+# calculating column widths, and again when producing output.  Sounds
+# odd, but is beneficial.  On the same file:
+#
+#     $ time ./tabulate -noseek ~/tmp/large >/dev/null
+#     usr=8.12s ker=0.04s rss=84032kB
+#
+# which reduced memory consumption to 84032 / 459728 = 18.3%.
+#
+# Surprisingly, iterating this insight once more, and storing the
+# files not even split into lines, increased(!) memory consumption: On
+# a much larger file, I've observed a 40% increase:
+#
+#     $ l ~/tmp/large
+#     -rw------- 1 sk sk 262M Jul  9 18:21 /home/sk/tmp/large
+#
+#     $ time ./tabulate -noseek ~/tmp/large | sha1sum
+#     usr=65.50s ker=1.10s rss=615296kB
+#
+#     $ time ./tabulate_blob -noseek ~/tmp/large | sha1sum
+#     usr=65.15s ker=1.47s rss=870452kB
+#
+# where the latter stored files en bloc.  I wonder why that is.

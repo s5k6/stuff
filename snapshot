@@ -44,7 +44,11 @@ current directory, using rsync with simple deduplication.  Call
     snapshot -n name # rsync $PWD/ to $PWD.snapshots/name
                      # also creates chsecksums from snapshot
 
-    snapshot -r name # rsync $PWD.snapshots/name/ to $PWD
+    snapshot -c name # check with $PWD.snapshots/name.md5
+
+    snapshot -d name # recursive diff from snapshot to current state
+
+    snapshot -R name # rsync $PWD.snapshots/name/ to $PWD
                      # will delete extra files
 
 Multiple snapshots share hardlinked files.  Be careful about that, and
@@ -76,14 +80,16 @@ if test -z "${1-}"; then
 
     if test -d "${snapdir}"; then
         echo "List snapshots in ${snapdir}"
+        echo
         cd "${snapdir}";
         ls -T0 --color=never --si -l -tr -d */;
     else
         echo 'No snapshots exist.'
     fi;
+    echo
     echo 'Run `snapshot -h` for help';
 
-elif test "${1-}" = -n; then
+elif test "${1-}" = '-n'; then
 
     test -n "${2-}" || err 'Need name for new snapshot.';
     name="$(basename "${2}")"
@@ -145,7 +151,23 @@ EOF
 
     exit 0;
 
-elif test "${1-}" = '-r'; then
+elif test "${1-}" = '-c'; then
+
+    test -n "${2-}" || err 'Need name of snapshot to restore.';
+    name="$(basename "${2}")"
+
+    echo "Check against ${name}.md5";
+    md5sum -c --quiet "${PWD}.snapshots/${name}.md5";
+
+elif test "${1-}" = '-d'; then
+
+    test -n "${2-}" || err 'Need name of snapshot to restore.';
+    name="$(basename "${2}")"
+
+    echo "Diff from ${name} to current";
+    diff -r --color=always "${PWD}.snapshots/${name}" .;
+
+elif test "${1-}" = '-R'; then
 
     test -n "${2-}" || err 'Need name of snapshot to restore.';
     name="$(basename "${2}")"

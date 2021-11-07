@@ -2,7 +2,7 @@
 set -u -e -C;
 shopt -s nullglob;
 
-img="$(mktemp -t screenshot.$(date +%s).XXXXXX.png)";
+img="$(mktemp -t screenshot.$(date +%Y%m%d-%H%M%S).XXXX.png)";
 echo "Writing screenshot to: $img";
 
 imlib2_grab "$img";

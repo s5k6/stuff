@@ -100,7 +100,6 @@ for (( n = 0; n < tot; n++ )); do
         fi;
         gm composite -compose difference "${i1}" "${i2}" "${o}" &
     fi;
-    gm composite -compose difference "${d1}/${img}" "${d2}/${img}" "${dir}/${img}" &
 done;
 
 echo 'Waiting for image subtraction to finish...';

@@ -16,6 +16,27 @@ function ask_yN {
     return 1;
 }
 
+if ! test "${2-}"; then
+    cat <<'EOF'
+
+Show PDF differences, rather ad-hoc, YMMV.
+
+    pdfDiff <file1> <file2> [<offset>]
+
+Each page of the two PDF files is rendered into a PNG image.  Then the
+corresponding page images (shifted by an optional offset), are
+combined into difference images.
+
+   difference_page n := file1_page (n + offset) >< file2_page n
+
+The difference operation `><` is `gm composite -compose difference`.
+Then `geeqie` is launched to review the resulting images.  An all
+black image indicates no differences.
+
+EOF
+    exit
+fi
+
 dir="$(mktemp -t -d 'pdfDiff.XXXXXXXXXX')";
 
 n1="$(basename "$1" .pdf)";
@@ -57,12 +78,27 @@ Different number of pages, see \`${dir}/pagediff\`.
 EOF
 fi;
 
-declare -i n=$(nproc);
-join <(ls "$d1") <(ls "$d2") | while read img; do
-    if test $n -gt 0; then
-        n=$((n - 1));
-    else
-        wait -n;
+declare -i p="$(nproc)";
+
+declare -i in1="$(ls "$d1" | wc -l)"
+declare -i in2="$(ls "$d2" | wc -l)"
+
+declare -i off="${3-0}"; # 3rd argument is offset, or 0
+in2="$((in2 + off))"
+declare -i tot="$(( in1 > in2 ? in1 : in2 ))"
+
+
+for (( n = 0; n < tot; n++ )); do
+    printf -v i1 '%s/%08d.png' "${d1}" "$((n + off))"
+    printf -v i2 '%s/%08d.png' "${d2}" "${n}"
+    printf -v o  '%s/%08d-%08d.png' "${dir}" "$((n + off))" "${n}"
+    if test -e "$i1" -a -e "$i2"; then
+        if test "$p" -gt 0; then
+            p="$((p - 1))";
+        else
+            wait -n;
+        fi;
+        gm composite -compose difference "${i1}" "${i2}" "${o}" &
     fi;
     gm composite -compose difference "${d1}/${img}" "${d2}/${img}" "${dir}/${img}" &
 done;

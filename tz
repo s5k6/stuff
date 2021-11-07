@@ -20,7 +20,7 @@ version='2020-Jan-10';
 
 
 # Default compressor and extension
-zip='bzip2'; ext='bz2';
+zip='zstd'; ext='zst';
 
 
 
@@ -73,6 +73,8 @@ function doUnzipArch { # args: <source> <unzipper> <target>
     echo "Extracting (tmp=${tmp})";
     if test "$2" = 'unzip'; then
         unzip "$1" -d "$tmp" || error 'FAILED';
+    elif test "$2" = 'un7z'; then
+        7z x -o"${tmp}" "${1}" || error "FAILED"
     else
         cat "$1" | eval "$2" | tar -k -C "$tmp" -x || error ' FAILED';
     fi;
@@ -200,7 +202,7 @@ If ‹arg› is a file, the action taken is determined by its suffix:
   ~   Extract the file using the usual naming conventions, i.e.,
       \`foo.gz\` goes to \`foo\`.
 
-  \`.zip\`
+  \`.zip\`, \`.7z\`
   ~   Extract the contents, enforcing secure naming conventions, figure
       out whether it was a file, a directory or a collection of items,
       and rearrange accordingly.
@@ -345,6 +347,9 @@ while test "${1:-}"; do
 
             # extract zip archives
             *.zip) doUnzipArch "$1" unzip "$(basename "$1" .zip)";;
+
+            # extract 7zip archives
+            *.7z) doUnzipArch "$1" un7z "$(basename "$1" .7z)";;
 
             # compress other files
             *) doZipFile "$1" "${zip}" "$(basename "$1").${ext}";

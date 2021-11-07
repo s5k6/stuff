@@ -10,7 +10,7 @@ set -u +H -C;
 # failglob — failed globbing raises an error
 # globstar — ** matches recursively
 
-shopt -s checkwinsize failglob globstar;
+shopt -s checkwinsize failglob nullglob globstar;
 
 
 
@@ -154,58 +154,6 @@ cd_improved () {
 
 
 
-# a better version of dig
-
-alias dig=dig_improved
-
-dig_improved () {
-    command dig +noall +answer +authority +noadditional +ttlunits -tany "$@"
-}
-
-
-
-# a better version of mv
-
-alias mv=mv_improved;
-
-function mv_improved {
-    if test -z "${1:-}"; then
- echo 'This `mv` is a shell alias.';
-    elif test "$#" = 1 -a -e "$1"; then
-        ls -ld "$1";
-        if read -e -p 'new: ' -i "$1" new; then
-            test "$1" = "$new" && return 1;
-            command mv -i "$1" "$new";
-            ls -ld "$new";
-        fi;
-    else
-        command mv "$@";
-    fi;
-}
-
-
-
-# a better version of ln
-
-alias ln=ln_improved;
-
-function ln_improved {
-    if test -z "${1:-}"; then
- echo 'This `ln` is a shell alias.';
-    elif test "$#" = 1 -a -L "$1"; then
-        ls -ld "$1";
-        if read -e -p '-> ' -i "$(readlink $1)" new; then
-            rm "$1";
-            command ln -sf "$new" "$1";
-            ls -ld "$1";
-        fi;
-    else
-        command ln "$@";
-    fi;
-}
-
-
-
 # a better version of time
 
 alias time=time_improved;
@@ -235,7 +183,6 @@ function tmux_improved {
         command tmux "$@";
     fi;
 }
-
 
 
 

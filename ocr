@@ -27,7 +27,7 @@ do
 
     imlib2_grab "${dir}/screen.png" || err grab
     convert "${dir}/screen.png" -crop "${W}x${H}+${X}+${Y}" "${dir}/crop.pnm" || err crop
-    
+
     clear
     tesseract "${dir}/crop.pnm" - | tee "${dir}/text.txt"
 done

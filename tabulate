@@ -16,21 +16,25 @@ Options
         Align column left or right respectively.  Multiple options
         apply to consecutive columns.  Multiple columns may be
         specified in one argument.  The last one is used for all
-        remaining columns.  E.g., `-rlrrl` will arrange the 1st, 3rd
-        and 4th column to the right, all others to the left.
-
-    -h  Print file name.
+        remaining columns.  I.e., `-r` will arrange all columns to the
+        right, `-rl` only the first one.
 
     -noseek
         Do not seek to read the file a second time.  This requires
         in-memory storage of the entire input.  `tabulate` does this
-        outomatically for streams, but you may enforce it for files as
-        well.
+        automatically for streams, but you may enforce it for files as
+        well.  This option implies memory overhead!
 
-        **Be careful**, this option implies severe memory overhead!
+A file can be specified as `-` to designate stdin.  If options but no
+files are given, stdin is used.  All options take effect on all files.
 
-A file can be `-` to designate stdin.  If options but no files are
-given, stdin is used.  All options take effect on all files.
+If multiple files are given on the command line, then their layout is
+calculated individually, and the respective output is headed by the
+file's name.
+
+Lines that do not contain a tab character are not split into columns.
+This allows their length to exceed, but not determine the width of the
+first column.  This is often useful for headers or intermediate comments.
 '''
     )
 
@@ -54,8 +58,11 @@ def tabulate(fh, alignments, seekable):
             lines.append(line)
 
         words = line.split('\t')  # see Note 1
-
         wordCount = len(words)
+
+        if wordCount < 2:
+            continue
+
         wordWidths = list(map(len, words))
         colWidths = (
             list(map(max, colWidths, wordWidths))
@@ -82,19 +89,23 @@ def tabulate(fh, alignments, seekable):
             w = '\033[4;36m' + pad + '\033[m' + word
         return w
 
-    def printLine(words):
-        print(
-            '\033[0;33m→'.join(map(align, colWidths, words, alignments2)),
-            end = '\033[0;35m↲\033[m\n'
-        )
+    def printLine(line):
+        words = line.split('\t')   # see Note 1
+        if len(words) < 2:
+            print('\033[32m', line, sep = '', end = '\033[35m↲\033[m\n')
+        else:
+            print(
+                '\033[0;33m→'.join(map(align, colWidths, words, alignments2)),
+                end = '\033[0;35m↲\033[m\n'
+            )
 
     if seekable:
         fh.seek(0)
         for line in iterLines(fh):
-            printLine(line.split('\t'))  # see Note 1
+            printLine(line)
     else:
         for line in lines:
-            printLine(line.split('\t'))  # see Note 1
+            printLine(line)
 
 
 
@@ -107,7 +118,6 @@ def main(argv):
     alignments = 'l'
     tabulatedSomething = False
     allowSeek = True
-    showHead = False
 
     files = []
 
@@ -116,9 +126,6 @@ def main(argv):
 
             if a[1:2] == 'l' or a[1:2] == 'r':
                 alignments += a[1:]
-
-            elif a[1:] == 'h':
-                showHead = True
 
             elif a[1:] == 'noseek':
                 allowSeek = False
@@ -141,12 +148,13 @@ def main(argv):
         return 0
 
     for f in files:
-        if showHead:
-            print('\033[1;30m', '(stdin)' if f == '' else f, '\033[m', sep='')
-
         if f == '':
+            if len(files) > 1:
+                print('\033[3;34m(stdin)\033[m')
             tabulate(sys.stdin, alignments, False)
         else:
+            if len(files) > 1:
+                print('\033[1;34m', f, '\033[m', sep='')
             with open(f, 'tr') as fh:
                 tabulate(fh, alignments, fh.seekable() and allowSeek)
 
@@ -157,6 +165,8 @@ if __name__ == '__main__':
     try:
         exit(main(sys.argv))
     except BrokenPipeError:
+        pass
+    except KeyboardInterrupt:
         pass
 
 

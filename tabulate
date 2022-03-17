@@ -19,6 +19,8 @@ Options
         remaining columns.  E.g., `-rlrrl` will arrange the 1st, 3rd
         and 4th column to the right, all others to the left.
 
+    -h  Print file name.
+
     -noseek
         Do not seek to read the file a second time.  This requires
         in-memory storage of the entire input.  `tabulate` does this
@@ -75,9 +77,9 @@ def tabulate(fh, alignments, seekable):
     def align(width, word, al):
         pad = (' ' * (width - len(word)))
         if al == 'l':
-            w = '\033[m' + word + '\033[4;37m' + pad
+            w = '\033[m' + word + '\033[4;36m' + pad
         else:
-            w = '\033[4;37m' + pad + '\033[m' + word
+            w = '\033[4;36m' + pad + '\033[m' + word
         return w
 
     def printLine(words):
@@ -98,7 +100,7 @@ def tabulate(fh, alignments, seekable):
 
 def main(argv):
 
-    if len(argv) == 1:
+    if len(argv) == 1 and sys.stdin.isatty():
         showHelp()
         return 0
 
@@ -114,6 +116,9 @@ def main(argv):
 
             if a[1:2] == 'l' or a[1:2] == 'r':
                 alignments += a[1:]
+
+            elif a[1:] == 'h':
+                showHead = True
 
             elif a[1:] == 'noseek':
                 allowSeek = False
@@ -136,6 +141,9 @@ def main(argv):
         return 0
 
     for f in files:
+        if showHead:
+            print('\033[1;30m', '(stdin)' if f == '' else f, '\033[m', sep='')
+
         if f == '':
             tabulate(sys.stdin, alignments, False)
         else:

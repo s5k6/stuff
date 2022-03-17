@@ -16,7 +16,7 @@
 set -u -e -C
 shopt -s failglob nullglob
 
-version='2021-Nov-7'
+version='2022-Feb-7'
 
 
 
@@ -267,6 +267,7 @@ if test -r "${HOME}/.tzrc"; then
 fi
 
 
+rename='' # name to use when renaming root component
 
 while test "${1:-}"; do
     if test "${1:0:1}" = '-'; then
@@ -307,13 +308,47 @@ while test "${1:-}"; do
                 ;;
         esac
 
+    elif test "${1:0:1}" = '='; then
+        rename="${1:1}"
+
     # compress directory
     elif test -d "${1}"; then
         echo "Compressing directory ${1}"
+
         if test "${zip}" = 'zip'; then
-            doZipDir "${1}" "${zip}" "$(basename "${1}").${ext}"
+            out="$(basename "${1}").zip"
+        elif test "${rename:-}"; then
+            out="${rename}.tar.${ext}"
         else
-            doZipDir "${1}" "${zip}" "$(basename "${1}").tar.${ext}"
+            out="$(basename "${1}").tar.${ext}"
+        fi
+
+        if overwrite "${out}"; then
+            if test "${zip}" = 'zip'; then
+                if test "${rename-}"; then
+                    warn "Renaming root not supported for zip"
+                    skip+=("${1}")
+                else
+                    trap "cleanup '${out}'" exit
+                    zip -r "${out}" "${1}" || error "FAILED"
+                    trap - exit
+                fi
+            else
+                if test "${rename:-}"; then
+                    trap "cleanup '${out}'" exit
+                    tar -C "$(dirname "${1}")" -c "$(basename "${1}")" \
+                        --transform 's#^'"${1}"'\(/\|$\)#'"${rename}"'/#' \
+                        | eval "${zip}" > "${out}" || error FAILED
+                    trap - exit
+                else
+                    trap "cleanup '${out}'" exit
+                    tar -C "$(dirname "${1}")" -c "$(basename "${1}")" \
+                        | eval "${zip}" > "${out}" || error FAILED
+                    trap - exit
+                fi
+            fi
+        else
+            skip+=("${1}")
         fi
 
     # process file

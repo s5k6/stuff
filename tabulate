@@ -116,7 +116,6 @@ def main(argv):
         return 0
 
     alignments = 'l'
-    tabulatedSomething = False
     allowSeek = True
 
     files = []

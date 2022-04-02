@@ -1,6 +1,30 @@
 #!/usr/bin/python
 
 import sys
+import types
+
+
+
+colorsets = {
+    'default': types.SimpleNamespace(
+        reset = '\033[m',
+        stdin = '\033[3;34m',
+        filename = '\033[1;34m',
+        pad = '\033[4;36m',
+        untabbed = '\033[32m',
+        eol = '\033[35m',
+        tab = '\033[0;33m'
+    ),
+    'mono': types.SimpleNamespace(
+        reset = '',
+        stdin = '',
+        filename = '',
+        pad = '',
+        untabbed = '',
+        eol = '',
+        tab = ''
+    )
+}
 
 
 
@@ -19,6 +43,16 @@ Options
         remaining columns.  I.e., `-r` will arrange all columns to the
         right, `-rl` only the first one.
 
+    {cm}
+        Selects the color scheme to use.
+
+    -tT Replace tabs with string T in the output.
+
+    -eE Print string E at end of line, just before newline.
+
+    -pP Use string P for padding, repeatedly if needed.  This disables
+        padding if P is empty, which may break output alignment.
+
     -noseek
         Do not seek to read the file a second time.  This requires
         in-memory storage of the entire input.  `tabulate` does this
@@ -35,7 +69,7 @@ file's name.
 Lines that do not contain a tab character are not split into columns.
 This allows their length to exceed, but not determine the width of the
 first column.  This is often useful for headers or intermediate comments.
-'''
+'''.format(cm = ', '.join(map(lambda s: '-c' + s, colorsets.keys())))
     )
 
 
@@ -47,7 +81,7 @@ def iterLines(fh):
 
 
 
-def tabulate(fh, alignments, seekable):
+def tabulate(fh, alignments, seekable, cs, al):
 
     lines = []
     colWidths = []
@@ -81,22 +115,32 @@ def tabulate(fh, alignments, seekable):
         alignments[-1:] * (colCount - len(alignments))
     )
 
-    def align(width, word, al):
-        pad = (' ' * (width - len(word)))
-        if al == 'l':
-            w = '\033[m' + word + '\033[4;36m' + pad
+    def align(width, word, d):
+        k = width - len(word)
+        if k < 1 or len(al.pad) < 1:
+            return word
         else:
-            w = '\033[4;36m' + pad + '\033[m' + word
-        return w
+            n = k // len(al.pad)
+            m = k % len(al.pad)
+            pad = (al.pad * n + al.pad[:m])
+
+            if d == 'l':
+                w = cs.reset + word + cs.pad + pad
+            else:
+                w = cs.pad + pad + cs.reset + word
+            return w
 
     def printLine(line):
         words = line.split('\t')   # see Note 1
         if len(words) < 2:
-            print('\033[32m', line, sep = '', end = '\033[35m↲\033[m\n')
+            print(cs.untabbed, line, cs.eol, al.eol, cs.reset, sep = '')
         else:
             print(
-                '\033[0;33m→'.join(map(align, colWidths, words, alignments2)),
-                end = '\033[0;35m↲\033[m\n'
+                (cs.tab + al.tab + cs.reset).join(
+                    map(align, colWidths, words, alignments2)
+                ),
+                cs.reset, cs.eol, al.eol, cs.reset,
+                sep = ''
             )
 
     if seekable:
@@ -116,9 +160,14 @@ def main(argv):
         return 0
 
     alignments = 'l'
+    tabulatedSomething = False
     allowSeek = True
+    cs = colorsets['default']
 
     files = []
+    t = '→'
+    e = '↲'
+    p = ' '
 
     for a in argv[1:]:
         if a[0:1] == '-':
@@ -128,6 +177,22 @@ def main(argv):
 
             elif a[1:] == 'noseek':
                 allowSeek = False
+
+            elif a[1:2] == 'c':
+                try:
+                    cs = colorsets[a[2:]]
+                except KeyError:
+                    print("Unknown color map:", a[2:], file = sys.stderr)
+                    sys.exit(1)
+
+            elif a[1:2] == 't':
+                t = a[2:]
+
+            elif a[1:2] == 'e':
+                e = a[2:]
+
+            elif a[1:2] == 'p':
+                p = a[2:]
 
             elif a[1:] == '':
                 if '' in files:
@@ -142,20 +207,22 @@ def main(argv):
         else:
             files.append(a)
 
+    al = types.SimpleNamespace(tab = t, eol = e, pad = p)
+
     if files == []:
-        tabulate(sys.stdin, alignments, False)
+        tabulate(sys.stdin, alignments, False, cs, al)
         return 0
 
     for f in files:
         if f == '':
             if len(files) > 1:
-                print('\033[3;34m(stdin)\033[m')
-            tabulate(sys.stdin, alignments, False)
+                print(cs.stdin, '(stdin)', cs.reset, sep='')
+            tabulate(sys.stdin, alignments, False, cs, al)
         else:
             if len(files) > 1:
-                print('\033[1;34m', f, '\033[m', sep='')
+                print(cs.filename, f, cs.reset, sep='')
             with open(f, 'tr') as fh:
-                tabulate(fh, alignments, fh.seekable() and allowSeek)
+                tabulate(fh, alignments, fh.seekable() and allowSeek, cs, al)
 
 
 

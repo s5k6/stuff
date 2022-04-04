@@ -1,60 +1,105 @@
 #!/bin/bash
-set -u -e -C;
-shopt -s nullglob;
+set -u -e -C
+shopt -s nullglob
 
 function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
 function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
-function info { echo $'\e[36m'"$@"$'\e[m'; }
+function info { echo $'\n\e[36m'"$@"$'\e[m'; }
 
 function ask_yN {
-    local answer='';
-    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer;
+    local answer=''
+    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer
     if test "${answer}" = y; then
-        info yes;
-        return 0;
-    fi;
-    info no;
-    return 1;
+        info yes
+        return 0
+    fi
+    info no
+    return 1
 }
 
-while read -u3 old; do
-    if ask_yN "Close ${old}?"; then
-        info "Closing: ${old}";
-        umount "/dev/mapper/${old}" || warn "Failed: umount /dev/mapper/${old}";
-        cryptsetup close "$old" || warn "Failed: cryptsetup close ${old}";
-        exit;
-    fi;
-done 3< <(dmsetup ls --target crypt | grep luks | sed -E 's/\s.*//')
+function listBlockDevices {
+    info 'List block devices'
+    lsblk -oname,size,type,mountpoint
+}
 
-until
-    read -e -i "${dev-}" -p 'device = ' dev;
-    test -r "$dev";
-do
-    warn "Not readable: $dev";
-done;
 
-until
-    read -e -i "${mnt-}" -p 'mountpoint = ' mnt
-    test -d "$mnt";
-do
-    if test -z "${mnt}"; then
-        mnt="$(mktemp -t -d mnt.XXXXXXXXXXXXXXX)";
-        warn "Created mountpoint ${mnt}";
-    fi;
-done;
+if test "${1-}" = '-u'; then
 
-read -ep 'keyfile = ' keyfile
+    info 'Existing device names with cryptotarget'
+    until
+        dmsetup ls --target crypt
+        read -e -i "${old-}" -p 'close = ' old
+        old="${old#/dev/mapper/}"
+        test -e "/dev/mapper/${old}"
+    do
+        warn 'Give device mapper name to close'
+    done
+    if test "${old}"; then
+        umount "/dev/mapper/${old}" || warn "Failed: umount /dev/mapper/${old}"
+        cryptsetup close "$old" || warn "Failed: cryptsetup close ${old}"
+        listBlockDevices
+    else
+        err "Does not exist: ${old}"
+    fi
 
-map="$(basename "${dev}").$(mktemp -u XXXXXXXXXXXXXXX).luks"
-
-if test "${keyfile}"; then
-    cryptsetup open "${dev}" "${map}" --type luks --key-file "${keyfile}";
 else
-    cryptsetup open "${dev}" "${map}" --type luks;
-fi || err 'Failed: cryptsetup open';
-if mount "/dev/mapper/${map}" "${mnt}"; then
-    info "Success.";
-else
-    cryptsetup close "$map" || warn 'Failed: cryptsetup close';
-    err 'Failed: mount';
-fi;
+    listBlockDevices
+
+    info 'Open new device'
+
+    dev="${1-}"
+    until
+        if test -z "${dev}"; then
+            false
+        else
+            if cryptsetup isLuks "${dev}"; then
+                true
+            else
+                warn "Not a LUKS device: $dev"
+                false
+            fi
+        fi
+    do
+        read -e -i "${dev-}" -p 'device = ' dev
+        test -z "${dev}" && exit
+    done
+
+    mnt="${2-}"
+    until
+        test -d "${mnt}"
+    do
+        read -e -i "${mnt-}" -p 'mountpoint = ' mnt
+        if test -z "${mnt}"; then
+            mnt="$(mktemp -t -d mnt.XXXXXXXXXXXXXXX)"
+            warn "Created new ${mnt}"
+        fi
+    done
+
+    map="$(blkid -ovalue -sUUID "${dev}")"
+
+    keyfile="${3-}"
+    until
+        if test -z "${keyfile}"; then
+            false
+        elif test "${keyfile}" = -; then
+            cryptsetup open "${dev}" "${map}" --type luks
+        elif test -r "${keyfile}"; then
+            cryptsetup open "${dev}" "${map}" --type luks \
+                       --key-file "${keyfile}"
+        else
+            warn 'Pass keyfile or `-` for passphrase'
+            false
+        fi
+    do
+        read -e -i "${keyfile-}" -p 'keyfile = ' keyfile
+    done || err 'Nothing opened'
+
+    if mount "/dev/mapper/${map}" "${mnt}"; then
+        info "Success."
+    else
+        cryptsetup close "$map" || warn 'Failed: cryptsetup close'
+        err 'Failed: mount'
+    fi
+
+    listBlockDevices
+fi

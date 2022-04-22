@@ -24,28 +24,48 @@ function listBlockDevices {
 
 
 if test "${1-}" = '-u'; then
+    shift
 
-    info 'Existing device names with cryptotarget'
-    until
-        dmsetup ls --target crypt
-        read -e -i "${old-}" -p 'close = ' old
-        old="${old#/dev/mapper/}"
-        test -e "/dev/mapper/${old}"
-    do
-        warn 'Give device mapper name to close'
-    done
-    if test "${old}"; then
-        umount "/dev/mapper/${old}" || warn "Failed: umount /dev/mapper/${old}"
-        cryptsetup close "$old" || warn "Failed: cryptsetup close ${old}"
-        listBlockDevices
-    else
-        err "Does not exist: ${old}"
-    fi
-
-else
     listBlockDevices
 
-    info 'Open new device'
+    info 'Close open LUKS device'
+
+    map=''
+    mnt="${1-}"
+    if test "${mnt}"; then
+        mnt="$(realpath "${mnt}")"
+        if mountpoint "${mnt}"; then
+            while IFS= read -r map; do
+                map="${map#/dev/mapper/}"
+                echo "Is mapped to ${map}"
+                break
+            done < <(sed -En 's#^(\S+)\s+'"${mnt}"'\s.*#\1#p' < /proc/mounts)
+        else
+            err "Not a mountpoint: ${mnt}"
+        fi
+    fi
+
+    until
+        test -h "/dev/mapper/${map}"
+    do
+        dmsetup ls --target crypt
+        read -e -i "${map-}" -p 'close = ' map
+        map="${map#/dev/mapper/}"
+    done
+    if test "${map}"; then
+        umount "/dev/mapper/${map}" || warn "Failed: umount /dev/mapper/${map}"
+        cryptsetup close "$map" || warn "Failed: cryptsetup close ${map}"
+        listBlockDevices
+    else
+        err "Does not exist: ${map}"
+    fi
+
+elif test "${1-}" = '-m'; then
+    shift
+
+    listBlockDevices
+
+    info 'Open new LUKS device'
 
     dev="${1-}"
     until
@@ -102,4 +122,15 @@ else
     fi
 
     listBlockDevices
+
+else
+
+    cat <<'.'
+Synopsis
+
+    luks -m [device [mountpoint [keyfile | -]]]
+
+    luks -u
+
+.
 fi

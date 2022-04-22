@@ -20,6 +20,8 @@ function ask_yN {
 function listBlockDevices {
     info 'List block devices'
     lsblk -oname,size,type,mountpoint
+    #info 'List device mappings of crypto type'
+    #dmsetup ls --target crypt
 }
 
 
@@ -125,12 +127,12 @@ elif test "${1-}" = '-m'; then
 
 else
 
+    listBlockDevices
+
+    info 'Synopsis'
+
     cat <<'.'
-Synopsis
-
     luks -m [device [mountpoint [keyfile | -]]]
-
-    luks -u
-
+    luks -u [mountpoint]
 .
 fi

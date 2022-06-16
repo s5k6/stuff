@@ -32,28 +32,17 @@ if test "${1-}" = '-u'; then
 
     info 'Close open LUKS device'
 
-    map=''
-    mnt="${1-}"
-    if test "${mnt}"; then
-        mnt="$(realpath "${mnt}")"
-        if mountpoint "${mnt}"; then
-            while IFS= read -r map; do
-                map="${map#/dev/mapper/}"
-                echo "Is mapped to ${map}"
-                break
-            done < <(sed -En 's#^(\S+)\s+'"${mnt}"'\s.*#\1#p' < /proc/mounts)
-        else
-            err "Not a mountpoint: ${mnt}"
-        fi
-    fi
+    map="${1-}"
 
-    until
-        test -h "/dev/mapper/${map}"
-    do
-        dmsetup ls --target crypt
-        read -e -i "${map-}" -p 'close = ' map
-        map="${map#/dev/mapper/}"
+    until test -h "/dev/mapper/${map}"; do
+        if mountpoint "${map}" > /dev/null 2>&1; then
+            map="$(findmnt -n -oSOURCE "${map}")"
+            map="${map#/dev/mapper/}"
+        else
+            read -e -i "${map-}" -p 'close = ' map
+        fi
     done
+
     if test "${map}"; then
         umount "/dev/mapper/${map}" || warn "Failed: umount /dev/mapper/${map}"
         cryptsetup close "$map" || warn "Failed: cryptsetup close ${map}"

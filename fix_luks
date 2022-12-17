@@ -1,0 +1,24 @@
+#!/bin/bash
+set -u -e -C
+shopt -s failglob
+
+# This script solves "Keyboard does not work at LUKS password prompt"
+# [1], by running `mkinitcpio` after unlocking the LUKS-encrypted root
+# partition.  Boot from an Arch Linux installation medium, then run
+# this script.
+
+lsblk -oname,size,type,mountpoint
+read -e -i/dev/ -pboot= boot
+read -e -i/dev/ -proot= root
+read -e -i/mnt/ -pmnt= mnt
+
+cryptsetup isLuks "${root}"
+map="$(blkid -ovalue -sUUID "${root}")"
+cryptsetup open "${root}" "${map}" --type luks
+mount "/dev/mapper/${map}" "${mnt}"
+mount "${boot}" "${mnt}/boot"
+
+arch-chroot "${mnt}" mkinitcpio -P
+
+
+# [1]: https://bbs.archlinux.org/viewtopic.php?id=243254

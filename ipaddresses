@@ -1,0 +1,15 @@
+#!/bin/bash
+set -u -e -C
+shopt -s nullglob
+
+js=js78   # update this every now and then
+
+ip -j addr | "${js}" <(cat <<'.'
+Array.prototype.flat = function() { return [].concat(...this); }
+txt=''; while (l = readline()) txt += l
+rs = JSON.parse(txt).map(x => x.addr_info).flat().map(x => [x.scope, x.local])
+if (typeof rs == 'undefined') { printErr("nothing found"); quit(1) }
+//print(JSON.stringify(rs))
+for (var i = 0; i < rs.length; i++) print(rs[i].join('\t'))
+.
+)

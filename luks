@@ -114,6 +114,57 @@ elif test "${1-}" = '-m'; then
 
     listBlockDevices
 
+elif test "${1-}" = '--init'; then
+    shift
+
+    listBlockDevices
+
+    warn 'Initialise new LUKS device'
+
+    partition="${1-}"
+    until
+        if test -z "${partition}"; then
+            false
+        else
+            if test -b "${partition}"; then
+                true
+            else
+                warn "Not a block special device: ${partition}"
+                false
+            fi
+        fi
+    do
+        read -e -i "${partition-}" -p 'partition = ' partition
+        test -z "${partition}" && exit
+    done
+
+    mnt="${2-}"
+    until
+        test -d "${mnt}"
+    do
+        read -e -i "${mnt-}" -p 'mountpoint = ' mnt
+        if test -z "${mnt}"; then
+            mnt="$(mktemp -t -d mnt.XXXXXXXXXXXXXXX)"
+            warn "Created new ${mnt}"
+        fi
+    done
+
+    cryptsetup \
+        --cipher aes-xts-plain --key-size 512 --verbose \
+        luksFormat "${partition}"
+
+    map="$(blkid -ovalue -sUUID "${partition}")"
+
+    listBlockDevices
+
+    cryptsetup open "${partition}" "${map}" --type luks
+
+    mkfs.btrfs "/dev/mapper/${map}"
+
+    mount "/dev/mapper/${map}" "${mnt}"
+
+    listBlockDevices
+
 else
 
     listBlockDevices
@@ -123,5 +174,6 @@ else
     cat <<'.'
     luks -m [device [mountpoint [keyfile | -]]]
     luks -u [mountpoint]
+    luks --init [partition] [target]
 .
 fi

@@ -105,7 +105,13 @@ elif test "${1-}" = '-m'; then
         read -e -i "${keyfile-}" -p 'keyfile = ' keyfile
     done || err 'Nothing opened'
 
-    if mount "/dev/mapper/${map}" "${mnt}"; then
+    if
+        if test "${4-}"; then
+            mount -o "${4}" "/dev/mapper/${map}" "${mnt}";
+        else
+            mount "/dev/mapper/${map}" "${mnt}";
+        fi
+    then
         info "Success."
     else
         cryptsetup close "$map" || warn 'Failed: cryptsetup close'
@@ -172,7 +178,7 @@ else
     info 'Synopsis'
 
     cat <<'.'
-    luks -m [device [mountpoint [keyfile | -]]]
+    luks -m [device [mountpoint [keyfile | -]]] [mountOptions]
     luks -u [mountpoint]
     luks --init [partition] [target]
 .

@@ -1,5 +1,139 @@
-#!/usr/bin/bash
+#!/usr/bin/python
 
-badchar='][ !?*<>&\n\t"'\''`$\\#():;\|';
+import sys
+import os
+import re
 
-ls -a --quoting-style=escape | sed -n '/['"$badchar"']/ {;s/\\ / /g;h;s/['"$badchar"']/_/g;s/\\./_/g;s/_\+/_/g;s/^_\|_$//g;s/^/'\''/;s/$/'\''/;x;s/'\''/\\x27/g;s/^/mv -n $'\''/;s/$/'\''/;G;s/\n/ /;p;}' | sh;
+
+
+badChars = re.compile('[ \[\]!?*<>&\n\t"\'$\\#:;|]')
+
+
+
+# Quoting for printing the old name
+def quote(x):
+    return x.replace('\t', '\\t').replace('\n', '\\n')
+
+
+
+def sanitize(execute, p):
+
+    # Calculate new name by splitting at bad characters, removing
+    # empty words, and then join with interspesing `_`.
+    sanitized = "_".join(
+        filter(lambda l: l, badChars.split(p.name))
+    )
+
+    # If there is a better name, try to rename.
+    if p.name != sanitized:
+
+        if not execute:
+            print(f"Would rename: {quote(p.name)}\n  to {sanitized}")
+            return
+
+        # make sure traget does not exist, before moving
+        try:
+            if p.is_dir():
+                os.mkdir(sanitized, mode = 0o100)
+            else:
+                with open(sanitized, "x") as f:
+                    pass
+        except FileExistsError:
+            print(f"Exists: {sanitized}\n  not renaming: {quote(p.name)}")
+            return
+
+        # try to rename, automatically overwriting dummy created above
+        try:
+            os.rename(p, sanitized)
+            print(f"Renamed: {quote(p.name)}\n  to: {sanitized}")
+        except OSError as e:
+            print(e)
+
+            # cleanup, remove dummy created above
+            try:
+                if p.is_dir():
+                    os.rmdir(sanitized)
+                else:
+                    os.remove(sanitized)
+            except OSError as e:
+                print(e)
+
+
+
+# Bit of a bummer here: Seems like one cannot create an `os.DirEntry`
+# from a path alone [1], the suggested solution seems to be.
+
+class PseudoDirEntry:
+
+    # os.DirEntry interface
+    def __init__(self, path):
+        self.path = os.path.realpath(path)
+        self.name = os.path.basename(self.path)
+    def is_dir(self):
+        return os.path.isdir(self.path)
+
+    # os.PathLike interface
+    def __fspath__(self):
+        return self.path
+
+
+
+def main(args):
+
+    if len(args) == 1:
+        # rename all
+        if args[0] == '--all':
+            for p in os.scandir():
+                sanitize(True, p)
+            return 0
+
+        elif args[0] == '--help':
+            print(
+f'''
+Sanitize file names in current directory
+
+    detox
+    detox --all
+    detox [--] files...
+
+Without arguments, preview all changes that would be made.  Use
+`--all` to process all (toxic) files in the current directory.
+Otherwise, name the desired files individually.
+'''
+            )
+
+        elif args[0] == '--':
+            args = args[1:]
+
+        else:
+            print('Invalid argument, try `--help`.')
+            return 1
+
+    # rename explicitly named ones
+    if len(args) > 0:
+        for a in args:
+            if "/" in a:
+                print(f"Cannot work across directories: {a}")
+            else:
+                sanitize(True, PseudoDirEntry(a))
+        return 0
+
+    # only demo if no arguments are given
+    for p in os.scandir():
+        sanitize(False, p)
+    print('Demo mode, not executed listed renames (if any), try `--help`.')
+
+    return 0
+
+
+
+if __name__ == '__main__':
+    try:
+        exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        print('KeyboardInterrupt')
+        exit(1)
+
+
+
+# [1]: https://stackoverflow.com/questions/38307995/create-os-direntry

@@ -6,7 +6,7 @@ import re
 
 
 
-badChars = re.compile('[ \[\]!?*<>&\n\t"\'$\\#:;|]')
+badChars = re.compile('[ \[\]!?*<>&\n\t"\'$\\#:;|()]')
 
 
 

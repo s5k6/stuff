@@ -2,4 +2,4 @@
 set -u -e -C
 shopt -s nullglob
 
-e "$(mktemp -u -t "scratchpad.$(date '+%Y-%m-%d_%H:%M:%S').XXXXXXXX")"
+e "$(mktemp -u -t "scratchpad.$(date '+%Y%m%d-%H%M%S').XXXXXXXX")"

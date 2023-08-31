@@ -16,12 +16,12 @@
 set -u -e -C
 shopt -s failglob nullglob
 
-version='2022-Feb-7'
+version='2023-Aug-30'
 
 
 
 # Default compressor and extension
-zip='zstd'; ext='zst'
+zip='zstd -9 --long=31 -T0'; ext='zst'
 
 
 
@@ -67,10 +67,19 @@ function cleanup { # args: <filename>*
 
 # Decompress an archive.
 
-function doUnzipArch { # args: <source> <unzipper> <target>
-    if overwrite "${3}"; then
-        tmp="$(mktemp -d "${3}.XXXXXXXXXX")" || error "mktemp failed."
-        trap "cleanup '${3}' '${tmp}'" exit
+function doUnzipArch { # args: <source> <unzipper> <suffix> <rename>
+    expect="$(basename "${1}" ".${3}")"
+    if test "${4-}"; then
+        out="${4}"
+    else
+        out="${expect}"
+    fi
+
+    echo "Unzip archive ${1}: ${out}"
+
+    if overwrite "${out}"; then
+        tmp="$(mktemp -d "${out}.XXXXXXXXXX")" || error "mktemp failed."
+        trap "cleanup '${out}' '${tmp}'" exit
         echo "Extracting (tmp=${tmp})"
         if test "${2}" = 'unzip'; then
             unzip "${1}" -d "${tmp}" || error 'FAILED'
@@ -80,22 +89,22 @@ function doUnzipArch { # args: <source> <unzipper> <target>
             cat "${1}" | eval "${2}" | tar -k -C "${tmp}" -x || error ' FAILED'
         fi
         echo -n 'Policy checking...'
-        if test "$(ls -A "${tmp}")" = "${3}"; then
-            echo ' done'
-
-            if mv "${tmp}/${3}" "${3}"; then
-                true
-            else
-                origMode="$(stat -c "%a" "${tmp}/${3}")" \
+        found="$(ls -A "${tmp}" | head -n2)"  # get at most two files
+        if test "${found}" = "${expect}"; then
+            echo ' ok.'
+            if ! mv "${tmp}/${expect}" "${out}"; then
+                origMode="$(stat -c "%a" "${tmp}/${expect}")" \
                     || error "Could not determine file mode."
-                chmod 700 "${tmp}/${3}" || error "Could not chmod."
-                mv "${tmp}/${3}" "${3}" || error "Moving from ${tmp} failed."
-                chmod "${origMode}" "${3}" || error "Could not chmod."
+                chmod 700 "${tmp}/${expect}" || error "Could not chmod."
+                mv "${tmp}/${expect}" "${out}" \
+                    || error "Moving from ${tmp}/${expect} failed."
+                chmod "${origMode}" "${out}" || error "Could not chmod."
             fi
             rm -rf "${tmp}" || error "Removing ${tmp} failed."
         else
-            mv "${tmp}" "${3}" || error "Renaming ${tmp} failed."
-            daisies+=("${3}")
+            echo ' failed.'
+            mv "${tmp}" "${out}" || error "Renaming ${tmp} failed."
+            daisies+=("${out}")
         fi
         trap - exit
     else
@@ -105,56 +114,49 @@ function doUnzipArch { # args: <source> <unzipper> <target>
 
 
 
-# Compress a directory.
-
-function doZipDir { # args: <source> <zipper> <target>
-  if overwrite "${3}"; then
-    trap "cleanup '${3}'" exit
-    echo "Compressing into: '${3}'"
-    if test "${2}" = 'zip'; then
-        zip -r "${3}" "${1}" || error 'FAILED'
-    else
-        tar -C "$(dirname "${1}")" -c "$(basename "${1}")" \
-            | eval "${2}" > "${3}" || error 'FAILED'
-    fi
-    trap - exit
-  else
-    skip+=("${1}")
-  fi
-}
-
-
-
 # Decompress a file.
 
-function doUnzipFile { # args: <source> <unzipper> <target>
-  if overwrite "${3}"; then
-    trap "cleanup '${3}'" exit
-    echo "Extracting"
-    cat "${1}" | eval "${2}" > "${3}" || error " FAILED"
-    trap - exit
-  else
-    skip+=("${1}")
-  fi
+function doUnzipFile { # args: <source> <unzipper> <suffix> <rename>
+    if test "${4-}"; then
+        out="${4}"
+    else
+        out="$(basename "${1}" ".${3}")"
+    fi
+
+    echo "Unzip file ${1}: ${out}"
+
+    if overwrite "${out}"; then
+        trap "cleanup '${out}'" exit
+        echo "Extracting"
+        cat "${1}" | eval "${2}" > "${out}" || error " FAILED"
+        trap - exit
+    else
+        skip+=("${1}")
+    fi
 }
 
 
 
 # Compress a file
 
-function doZipFile { # args: <source> <zipper> <target>
-  if overwrite "${3}"; then
-    trap "cleanup '${3}'" exit
-    echo "Compressing into: '${3}'"
-    if test "${2}" = 'zip'; then
-        zip "${3}" "${1}" || error 'FAILED'
+function doZipFile { # args: <source> <zipper> <suffix> <rename>
+    if test "${4-}"; then
+        out="${4}.${3}"
     else
-        cat "${1}" | eval "${2}" > "${3}" || error ' FAILED'
+        out="${1}.${3}"
     fi
-    trap - exit
-  else
-    skip+=("${1}")
-  fi
+    echo "Compressing file ${1}: ${out}"
+    if overwrite "${out}"; then
+        trap "cleanup '${out}'" exit
+        if test "${2}" = 'zip'; then
+            zip "${out}" "${1}" || error 'FAILED'
+        else
+            cat "${1}" | eval "${2}" > "${out}" || error ' FAILED'
+        fi
+        trap - exit
+    else
+        skip+=("${1}")
+    fi
 }
 
 
@@ -188,6 +190,10 @@ Description
 
 Each argument is processed on its own, with the latest given options in
 effect.
+
+If ‹arg› starts with an equal sign \`=\`, then its remainder is used
+to rename the target of the next (and only the next) file or directory
+argument.  See "Renaming" below.
 
 If ‹arg› is a directory, it is tar'ed and then compressed using either
 gzip (-g), bzip2 (-b), lzma (-l), xz (-x) or zstd (-s), defaulting to
@@ -232,11 +238,32 @@ most common use case.
 
 All archives are required to put their contents into a directory whose
 name matches the name of the archive.  I.e., all the files in
-\`foo.tar.bz2\` must belong to a top level directory \`foo\`.  To enforce
-this, \`tz\` will, as an intermediate step, do all extracting below a
-newly created temporary directory in your current path and rearrange
-the contents later on, if safe to do so.  This matches the
-recommendations for untrusted archives given in the tar documentation.
+\`foo.tar.bz2\` must belong to a top level directory \`foo\`.  To
+enforce this, \`tz\` will, as an intermediate step, do all extracting
+below a newly created temporary directory in your current path and
+rearrange the contents later on, if safe to do so.  Otherwise, the
+temporary directory is simply renamed to match the expected name.
+This matches the recommendations for untrusted archives given in the
+tar documentation.
+
+
+Renaming
+========
+
+If a renaming argument, say \`=foo\`, precedes
+
+  * an archive or a compressed file, then the result will be renamed
+    to \`foo\`.  This does *not* bypass the security check, i.e., an
+    archive `bar.tgz` must still contain a single member \`bar\`.
+
+  * a directory, then the root of the directory will be renamed to
+    \`foo\` in the created tar archive, and the archive name will be
+    \`foo\` followed by a suitable extension.
+
+  * an uncompressed file, then the compressed file will be named
+    \`foo\` followed by a suitable extension.
+
+Each renaming arguments only affects the next following source.
 
 
 Bugs
@@ -310,11 +337,16 @@ while test "${1:-}"; do
 
     elif test "${1:0:1}" = '='; then
         rename="${1:1}"
+        rename="${rename%/}" # rm trailing slash
+        if test "${rename}" != "${rename%/*}"; then
+            error "Renaming argument must not contain slash: ${rename}"
+        fi
+        if test "${rename}" = . -o "${rename}" = ..; then
+            error "Invalid renaming argument: ${rename}"
+        fi
 
     # compress directory
     elif test -d "${1}"; then
-        echo "Compressing directory ${1}"
-
         if test "${zip}" = 'zip'; then
             out="$(basename "${1}").zip"
         elif test "${rename:-}"; then
@@ -322,6 +354,8 @@ while test "${1:-}"; do
         else
             out="$(basename "${1}").tar.${ext}"
         fi
+
+        echo "Compressing directory ${1}: ${out}"
 
         if overwrite "${out}"; then
             if test "${zip}" = 'zip'; then
@@ -334,109 +368,110 @@ while test "${1:-}"; do
                     trap - exit
                 fi
             else
-                if test "${rename:-}"; then
-                    trap "cleanup '${out}'" exit
-                    tar -C "$(dirname "${1}")" -c "$(basename "${1}")" \
-                        --transform 's#^'"${1}"'\(/\|$\)#'"${rename}"'/#' \
+                base="$(basename "${1}")"
+                trap "cleanup '${out}'" exit
+                if test "${rename-}"; then
+                    tar -C "$(dirname "${1}")" -c "${base}" \
+                        --transform 's/^'"${base}"'/'"${rename}"'/' \
                         | eval "${zip}" > "${out}" || error FAILED
-                    trap - exit
                 else
-                    trap "cleanup '${out}'" exit
-                    tar -C "$(dirname "${1}")" -c "$(basename "${1}")" \
+                    tar -C "$(dirname "${1}")" -c "${base}" \
                         | eval "${zip}" > "${out}" || error FAILED
-                    trap - exit
                 fi
+                trap - exit
             fi
         else
             skip+=("${1}")
         fi
 
+        rename='' # must be used only once
+
     # process file
     elif test -f "${1}"; then
-        echo "Processing file ${1}"
         case "${1}" in
 
             ### extracting archives ###
 
             # extract and untar bzip2'ed tar archives
             *.tar.bz2)
-                doUnzipArch "${1}" bunzip2 "$(basename "${1}" .tar.bz2)"
+                doUnzipArch "${1}" bunzip2 tar.bz2 "${rename-}"
                 ;;
             *.tb2)
-                doUnzipArch "${1}" bunzip2 "$(basename "${1}" .tb2)"
+                doUnzipArch "${1}" bunzip2 tb2 "${rename-}"
                 ;;
             *.tbz)
-                doUnzipArch "${1}" bunzip2 "$(basename "${1}" .tbz)"
+                doUnzipArch "${1}" bunzip2 tbz "${rename-}"
                 ;;
 
             # extract and untar gzip'ed tar archives
             *.tar.gz)
-                doUnzipArch "${1}" gunzip "$(basename "${1}" .tar.gz)"
+                doUnzipArch "${1}" gunzip tar.gz "${rename-}"
                 ;;
             *.tgz)
-                doUnzipArch "${1}" gunzip "$(basename "${1}" .tgz)"
+                doUnzipArch "${1}" gunzip tgz "${rename-}"
                 ;;
 
             # extract and untar lzma'ed tar archives
             *.tar.lzma)
-                doUnzipArch "${1}" unlzma "$(basename "${1}" .tar.lzma)"
+                doUnzipArch "${1}" unlzma tar.lzma "${rename-}"
                 ;;
             *.tlz)
-                doUnzipArch "${1}" unlzma "$(basename "${1}" .tgz)"
+                doUnzipArch "${1}" unlzma tgz "${rename-}"
                 ;;
 
             # extract and untar xz'ed tar archives
             *.tar.xz)
-                doUnzipArch "${1}" unxz "$(basename "${1}" .tar.xz)"
+                doUnzipArch "${1}" unxz tar.xz "${rename-}"
                 ;;
             *.txz)
-                doUnzipArch "${1}" unxz "$(basename "${1}" .txz)"
+                doUnzipArch "${1}" unxz txz "${rename-}"
                 ;;
 
             # extract and untar zstd'ed tar archives
             *.tar.zst)
-                doUnzipArch \
-                    "${1}" 'unzstd --long=31' "$(basename "${1}" .tar.zst)"
+                doUnzipArch "${1}" 'unzstd --long=31' tar.zst "${rename-}"
                 ;;
 
             # extract zip archives
             *.zip)
-                doUnzipArch "${1}" unzip "$(basename "${1}" .zip)"
+                doUnzipArch "${1}" unzip zip "${rename-}"
                 ;;
 
             # extract 7zip archives
             *.7z)
-                doUnzipArch "${1}" un7z "$(basename "${1}" .7z)"
+                doUnzipArch "${1}" un7z 7z "${rename-}"
                 ;;
 
             ### extract non-archive files ###
 
             *.bz2)
-                doUnzipFile "${1}" bunzip2 "$(basename "${1}" .bz2)"
+                doUnzipFile "${1}" bunzip2 bz2 "${rename-}"
                 ;;
 
             *.gz)
-                doUnzipFile "${1}" gunzip "$(basename "${1}" .gz)"
+                doUnzipFile "${1}" gunzip gz "${rename-}"
                 ;;
 
             *.lzma)
-                doUnzipFile "${1}" unlzma "$(basename "${1}" .lzma)"
+                doUnzipFile "${1}" unlzma lzma "${rename-}"
                 ;;
 
             *.xz)
-                doUnzipFile "${1}" unxz "$(basename "${1}" .xz)"
+                doUnzipFile "${1}" unxz xz "${rename-}"
                 ;;
 
             *.zst)
-                doUnzipFile "${1}" 'unzstd --long=31' "$(basename "${1}" .zst)"
+                doUnzipFile "${1}" 'unzstd --long=31' zst "${rename-}"
                 ;;
 
             ### compress other files ###
 
             *)
-                doZipFile "${1}" "${zip}" "$(basename "${1}").${ext}"
+                doZipFile "${1}" "${zip}" "${ext}" "${rename-}"
 
         esac
+
+        rename='' # must be used only once
 
     else
         error "No such file or directory: ${1}"

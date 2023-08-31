@@ -250,17 +250,18 @@ tar documentation.
 Renaming
 ========
 
-If a renaming argument, say \`=foo\`, precedes
+If a renaming argument, say \`=foo\`, identified by the leading equal
+sign, precedes…
 
-  * an archive or a compressed file, then the result will be renamed
+  * …an archive or a compressed file, then the result will be renamed
     to \`foo\`.  This does *not* bypass the security check, i.e., an
-    archive `bar.tgz` must still contain a single member \`bar\`.
+    archive \`bar.tgz\` must still contain a single member \`bar\`.
 
-  * a directory, then the root of the directory will be renamed to
+  * …a directory, then the root of the directory will be renamed to
     \`foo\` in the created tar archive, and the archive name will be
     \`foo\` followed by a suitable extension.
 
-  * an uncompressed file, then the compressed file will be named
+  * …an uncompressed file, then the compressed file will be named
     \`foo\` followed by a suitable extension.
 
 Each renaming arguments only affects the next following source.

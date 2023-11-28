@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright 2019 Stefan Klinger <http://stefan-klinger.de>
 set -u;
 
 # This needs `less` to fail when `r` is hit.  To set this up, do

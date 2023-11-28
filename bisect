@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# Copyright 2019 Stefan Klinger <http://stefan-klinger.de>
 
 import sys
 import subprocess
@@ -34,14 +35,14 @@ def parseArguments():
                 settings.command = sys.argv[i:]
                 return settings
         i += 1
-        
+
     settings.command = sys.argv[i:]
     return settings
 
 
 def dflt(d, x):
     return d if x is None else x
-        
+
 
 def main():
 
@@ -103,9 +104,9 @@ ____________________
 [1] https://docs.python.org/3.4/library/string.html#format-string-syntax
 '''
         )
-        
+
         exit(0)
-        
+
     args = parseArguments()
 
     ln = dflt(0, args.ln)
@@ -128,7 +129,7 @@ ____________________
     else:
         def run(cmd):
             return subprocess.run(cmd).returncode
-        
+
     try:
         if cmd(1) == cmd(2):
             print('The command looks independent of {N}.')
@@ -146,7 +147,7 @@ ____________________
     except FileNotFoundError:
         print('Command `' + cmd('N')[0] + '` not found.')
         exit(1)
-        
+
 
     mn = ln
     if args.monotonic: # do a monotonic search only
@@ -158,7 +159,7 @@ ____________________
             mn, (ln, lv), hn = ln, (hn, hv), 2 * ln - hn
             hv = run(cmd(hn))
     ln =  mn
-        
+
     if args.verbose:
         print('# narrowing')
 
@@ -176,11 +177,10 @@ ____________________
     else:
         print(str(ln) + " → " + str(lv) + ", " + str(hn) + " → " + str(hv))
 
-    
+
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print('Interrupted')
         exit(1)
-

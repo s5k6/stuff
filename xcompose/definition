@@ -125,8 +125,6 @@ Multi_key
     bar
         bar "∥"
         Right "↦"
-        bracketleft "⟦"
-        bracketright "⟧"
         less "«"
         greater "»"
         n "ℕ"
@@ -135,12 +133,19 @@ Multi_key
         r "ℝ"
         c "ℂ"
     bracketleft
+        bracketleft "⟦"
         bracketright "⟦⟧"
         apostrophe "‘"
         quotedbl "“"
     bracketright
+        bracketright "⟧"
         apostrophe "’"
         quotedbl "”"
+    parenleft
+        parenleft "⟨"
+        parenright "⟨⟩"
+    parenright
+        parenright "⟩"
     Down
         space "↓"
         Up "↕"

@@ -39,7 +39,9 @@ Multi_key
     ampersand
         b i o semicolon "☣"
         c h e e s e semicolon "🧀"
+        c h e semicolon "🤌"
         c u c u m b e r semicolon "🥒"
+        d a f u q semicolon "🤪"
         n o semicolon "✗"
         p e a c e semicolon "☮"
         p e a c h semicolon "🍑"
@@ -125,8 +127,6 @@ Multi_key
     bar
         bar "∥"
         Right "↦"
-        bracketleft "⟦"
-        bracketright "⟧"
         less "«"
         greater "»"
         n "ℕ"
@@ -135,12 +135,22 @@ Multi_key
         r "ℝ"
         c "ℂ"
     bracketleft
+        bracketleft "⟦"
         bracketright "⟦⟧"
         apostrophe "‘"
         quotedbl "“"
     bracketright
+        bracketright "⟧"
         apostrophe "’"
         quotedbl "”"
+    parenleft
+        parenleft "⟨"
+        parenright "⟨⟩"
+    parenright
+        parenright "⟩"
+    comma
+        c "ç"
+        C "Ç"
     Down
         space "↓"
         Up "↕"

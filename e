@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2019 Stefan Klinger <http://stefan-klinger.de>
 
 function runs { type "$1" >/dev/null; }
 

@@ -6,7 +6,7 @@ import re
 
 
 
-badChars = re.compile('[ \x1b\[\]!?*<>&\n\t"\'$\\#:;|()]')
+badChars = re.compile('[ \x1b\\[\\]!?*<>&\n\t"\'$\\#:;|()]')
 
 
 

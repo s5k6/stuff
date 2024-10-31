@@ -13,4 +13,4 @@ while test "${1:0:1}" = '-'; do
     shift;
 done;
 
-until "$@" | less -S "${opt[@]}"; do :; done
+until "$@" | less "${opt[@]}"; do :; done

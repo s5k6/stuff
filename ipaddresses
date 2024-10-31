@@ -3,7 +3,7 @@
 set -u -e -C
 shopt -s nullglob
 
-js=js78   # update this every now and then
+js=js   # update this every now and then
 
 ip -j addr | "${js}" <(cat <<'.'
 Array.prototype.flat = function() { return [].concat(...this); }

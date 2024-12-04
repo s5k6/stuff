@@ -3,7 +3,10 @@
 set -u -e -C
 shopt -s nullglob
 
-js=js   # update this every now and then
+# This requires a JavaScript interpreter `js`.  ArchLinux packages
+# `jsXYZ` with package names containing the version number.  Find
+# thelatest one, install and fix with `# ln -s /usr/bin/jsXYZ
+# /usr/local/bin/js`.
 
 ip -j addr | "${js}" <(cat <<'.'
 Array.prototype.flat = function() { return [].concat(...this); }

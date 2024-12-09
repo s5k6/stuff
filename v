@@ -33,7 +33,8 @@ for f in "$@"; do
         suf="${f##*.}";
 
         case "$mime" in
-            application/pdf) zathura+=("$f");;
+            #application/pdf) zathura+=("$f");;
+            application/pdf) firefox -new-window "$f"&;;
             application/vnd*) loffice+=("$f");;
             audio/*) mplayer+=("$f");;
             image/*) geeqie+=("$f");;

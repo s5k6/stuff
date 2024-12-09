@@ -1,0 +1,5 @@
+#!/bin/bash
+set -u -e -C
+shopt -s failglob nullglob
+
+ssh-keygen -R "$@"

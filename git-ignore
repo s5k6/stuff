@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright 2019 Stefan Klinger <http://stefan-klinger.de>
 set -u -e -C;
 shopt -s nullglob;
 
@@ -6,22 +7,13 @@ function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
 function warn { echo $'\e[31m'"$@"$'\e[m' >&2; }
 function info { echo $'\e[34m'"$@"$'\e[m'; }
 
-function ask_yN {
-    local answer='';
-    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer;
-    if test "${answer}" = y; then
-        info yes;
-        return 0;
-    fi;
-    info no;
-    return 1;
-}
-
 for i in "$@"; do
-    grep -Fq "$i" .gitignore && continue;
-    if ! test -e "$i"; then
-        ask_yN "Add non-existing ${i}?" || continue;
-    fi;
+    if ! [[ "$i" =~ / ]]; then i="/${i}"; fi
+    if ! test -e "./${i}"; then warn "Does not exist: $i"; continue; fi
+    if grep -Fsq "$i" .gitignore; then continue; fi
     echo "$i" >> .gitignore;
 done;
-test -e .gitignore && git add .gitignore;
+if test -e .gitignore; then
+    git add .gitignore
+    git --no-pager diff HEAD -- .gitignore
+fi

@@ -1,21 +1,21 @@
 #!/bin/bash
 # Copyright 2019 Stefan Klinger <http://stefan-klinger.de>
-set -u -e -C;
-shopt -s nullglob;
+set -u -e -C
+shopt -s nullglob
 
 function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
 function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
 function info { echo $'\e[36m'"$@"$'\e[m'; }
 
 function ask_yN {
-    local answer='';
-    read -n 1 -s -p "$* [yN]" answer;
+    local answer=''
+    read -n 1 -s -p "$* [yN]" answer
     if test "${answer}" = y; then
-        echo yes;
-        return 0;
-    fi;
-    echo no;
-    return 1;
+        echo yes
+        return 0
+    fi
+    echo no
+    return 1
 }
 
 if test "$#" = 0; then
@@ -27,11 +27,13 @@ semaphore is used to throttle execution to at most once per second.
 
     inotify FILES... -- COMMAND...
 
-EOF
-exit; fi;
+If FILES is empty, the executable itself is watched.
 
-s="inotify-${RANDOM}";
-trap "sem '$s' -u 2>/dev/null" exit;
+EOF
+exit; fi
+
+s="inotify-${RANDOM}"
+trap "sem '$s' -u 2>/dev/null" exit
 
 files=()
 cmd=()
@@ -42,21 +44,36 @@ for (( i = 0; i < "${#args[@]}"; i++ )); do
         files=( "${args[@]:0:$i}" )
         cmd=( "${args[@]:$((i+1))}" )
         break
-    fi;
-done;
+    fi
+done
 
 if test "${#cmd[@]}" -lt 1; then
-    err 'Invalid usage.  Run without arguments for help.';
-fi;
+    err 'Invalid usage.  Run without arguments for help.'
+fi
 
-echo "Files: ${files[@]}"
-echo "Cmd: ${cmd[@]}"
+if test "${#files[@]}" -lt 1; then
+    files=( "$(type -p "${cmd[0]}")" )
+fi
 
-clear;
-if "${cmd[@]}" 0<&-; then info ok; else warn failed; fi;
-while read e; do
-    if sem "$s" -i1 -x -t -f -v0 -- sleep 1; then
-        clear;
-        if "${cmd[@]}" 0<&-; then info ok; else warn failed; fi;
-    fi;
-done < <(inotifywait -m -e close_write --format %f "${files[@]}");
+#echo "Files: ${files[@]}"
+#echo "Cmd: ${cmd[@]}"
+
+events=close_write,delete,delete_self,move,move_self
+
+while true; do
+    clear
+    if "${cmd[@]}" 0<&-; then info ok; else warn failed; fi
+    date
+    while IFS=, read -ra es; do
+        echo "events" "${es[@]}"
+        for e in "${es[@]}"; do
+            if test "$e" = 'DELETE_SELF'; then echo deleted; break 2; fi
+            if test "$e" = 'MOVE_SELF'; then echo moved; break 2; fi
+        done
+        if sem "$s" -i1 -x -t -f -v0 -- sleep 1; then
+            clear
+            if "${cmd[@]}" 0<&-; then info ok; else warn failed; fi
+        fi
+    done < <(inotifywait -m -e "${events}" --format %e "${files[@]}")
+    sleep 1
+done

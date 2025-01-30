@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright 2021 Stefan Klinger <http://stefan-klinger.de>
 set -u -C
 shopt -s nullglob
 

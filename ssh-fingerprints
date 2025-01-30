@@ -1,0 +1,5 @@
+#!/bin/bash
+set -u -e -C
+shopt -s failglob nullglob
+
+cat /etc/ssh/ssh_host_*key.pub | ssh-keygen -l -f-

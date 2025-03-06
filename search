@@ -1,0 +1,48 @@
+#!/bin/bash
+# Copyright 2025 Stefan Klinger <http://stefan-klinger.de>
+set -u -e -C
+shopt -s failglob nullglob
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+if test -z "${1-}"; then
+    cat <<'.'
+
+search [STARTING-POINT...] [OPTION...] PATTERN
+
+This passes STARTING-POINTs to `find`, while and OPTIONs and PATTERN
+go to grep.  PATTERN is the last argument.  Grep is run with `-EHn`.
+
+.
+    exit 0
+fi
+
+findDirs=()
+grepArgs=()
+args=( "${@}" )
+
+for (( i = 0; i < "${#args[@]}"; i++ )); do
+    if test "${args[$i]:0:1}" = '-'; then
+        findDirs=( "${args[@]:0:$i}" )
+        grepArgs=( "${args[@]:${i}}" )
+        break
+    fi;
+done;
+
+if test "${#grepArgs[@]}" -lt 1; then
+    declare -i last="$((${#args[@]} - 1))"
+    findDirs=( "${args[@]:0:last}" )
+    grepArgs=( "${args[@]:last}" )
+fi
+
+if test "${#findDirs[@]}" -lt 1; then
+    findDirs=( . )
+fi
+
+cmd=( find "${findDirs[@]}" -type f -exec grep -EHn "${grepArgs[@]}" '{}' ';' )
+
+printf '\e[37m$'; printf ' %q' "${cmd[@]}"; printf '\e[m\n'
+
+exec "${cmd[@]}"

@@ -30,7 +30,7 @@ do
     convert "${dir}/screen.png" -crop "${W}x${H}+${X}+${Y}" "${dir}/crop.pnm" || err crop
 
     clear
-    tesseract "${dir}/crop.pnm" - | tee "${dir}/text.txt"
+    tesseract -l deu "${dir}/crop.pnm" - | tee "${dir}/text.txt"
 done
 
 e "${dir}/text.txt"

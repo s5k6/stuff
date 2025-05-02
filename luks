@@ -128,7 +128,24 @@ elif test "${1-}" = '--init'; then
 
     warn 'Initialise new LUKS device'
 
-    partition="${1-}"
+    fstype="${1-btrfs}"
+    until
+        if test -z "${fstype}"; then
+            false
+        else
+            if type -p "mkfs.${fstype}" >/dev/null; then
+                true
+            else
+                warn "Not on PATH: mkfs.${fstype}"
+                false
+            fi
+        fi
+    do
+        read -e -i "${fstype-}" -p 'fstype = ' fstype
+        test -z "${fstype}" && exit
+    done
+
+    partition="${2-}"
     until
         if test -z "${partition}"; then
             false
@@ -137,7 +154,7 @@ elif test "${1-}" = '--init'; then
                 true
             else
                 warn "Not a block special device: ${partition}"
-                false
+                ask_yN 'Continue on file?'
             fi
         fi
     do
@@ -145,7 +162,7 @@ elif test "${1-}" = '--init'; then
         test -z "${partition}" && exit
     done
 
-    mnt="${2-}"
+    mnt="${3-}"
     until
         test -d "${mnt}"
     do
@@ -166,7 +183,7 @@ elif test "${1-}" = '--init'; then
 
     cryptsetup open "${partition}" "${map}" --type luks
 
-    mkfs.btrfs "/dev/mapper/${map}"
+    "mkfs.${fstype}" "/dev/mapper/${map}"
 
     mount "/dev/mapper/${map}" "${mnt}"
 
@@ -181,6 +198,6 @@ else
     cat <<'.'
     luks -m [device [mountpoint [keyfile | -]]] [mountOptions]
     luks -u [mountpoint]
-    luks --init [partition] [target]
+    luks --init [fstype] [partition] [target]
 .
 fi

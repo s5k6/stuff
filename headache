@@ -1,0 +1,22 @@
+#!/bin/bash
+# Copyright 2023 Stefan Klinger <http://stefan-klinger.de>
+set -u -e -C
+shopt -s failglob
+
+
+while IFS= read -d '' file; do
+
+    if grep -Fq 'Copyright' "${file}"; then continue; fi
+    echo "Missing notice in: ${file}"
+
+    y="$(git log --follow --format=%ad --date=format:%Y --reverse  -- "${file}" | head -n1)"
+
+    c="# Copyright ${y} Stefan Klinger <http://stefan-klinger.de>"
+
+    if head -n1 "${file}" | grep -Eq '^#!'; then
+        sed -i "1a\
+${c}" "${file}"
+    fi
+
+done < <(find . -maxdepth 1 -name .git -prune -o -type f -exec grep -Fq -m1 '#!/' {} \; -print0
+)

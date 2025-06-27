@@ -3,29 +3,17 @@
 set -u -e -C;
 shopt -s nullglob;
 
-function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
-function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
-function info { echo $'\e[36m'"$@"$'\e[m'; }
+img="${HOME}/.lockscreen.png"
 
-function ask_yN {
-    local answer='';
-    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer;
-    if test "${answer}" = y; then
-        info yes;
-        return 0;
-    fi;
-    info no;
-    return 1;
-}
+if ! test -r "${img}"; then
+    echo "Not found: ${img}"
+    echo 'Creating new lockscreen image from screenshot'
 
-img="$(mktemp -t 'lockscreen.XXXXXXXX.png')";
-trap "rm -f '$img'" EXIT;
+    imlib2_grab "${img}"
+    gmic \
+        input "$img" \
+        wave 10,0.01 blur 7,0 input 1,1,1,3 blend darken,10% \
+        output "$img"
+fi
 
-imlib2_grab "$img";
-gmic \
-    input "$img" \
-    wave 10,0.01 blur 7,0 input 1,1,1,3 blend darken,10% \
-    output "$img"
-
-i3lock -f -i "$img";
-sleep 3;
+i3lock -f -e -n -i "${HOME}/.lockscreen.png"

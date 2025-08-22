@@ -33,16 +33,22 @@ if test "${DISPLAY}" && avail emacsclient; then
 
             read -ra tokens <<<"${a}"               # (1)
 
-            if isint "${tokens[-1]}"; then
-                y="${tokens[-1]}"
-                if isint "${tokens[-2]}"; then
-                    x="${tokens[-2]}"
-                    list+=( "+${x}:${y}" "${tokens[*]:0:${#tokens[@]}-2}" )
-                else
-                    list+=( "+${y}" "${tokens[*]:0:${#tokens[@]}-1}" )
-                fi
+            declare -i j=0
+            for v in "${tokens[@]}"; do
+                if isint "${v}"; then break; fi
+                j+=1
+            done
+
+            f="${tokens[*]:0:j}"     #(2)
+            l="${tokens[j]}"
+            c="${tokens[j+1]}"
+
+            if isint "${c}"; then
+                list+=( "+${l}:${c}" "${f}" )
+            elif isint "${l}"; then
+                list+=( "+${l}" "${f}" )
             else
-                list+=( "${tokens[*]}" )           # (2)
+                list+=( "${f}" )
             fi
 
         fi

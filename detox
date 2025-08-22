@@ -7,7 +7,7 @@ import re
 
 
 
-badChars = re.compile('[ \x1b\\[\\]!?*<>&\n\t"\'$\\#:;|()]')
+badChars = re.compile('[^-a-zA-Z0-9!%^&(){}äöüßÄÖÜ.,:;"<>\\[\\]]')
 
 
 
@@ -50,7 +50,10 @@ def main(args):
                 # try to rename, automatically overwriting dummy created above
                 try:
                     os.rename(p, sanitized)
-                    print(f"Renamed \x1b[35m{q}\x1b[m to \x1b[34m{sanitized}\x1b[m")
+                    print(
+                        f"Renamed \x1b[35m{q}\x1b[m to \x1b[34m"
+                        f"{sanitized}\x1b[m"
+                    )
                     print(f"mv '{cwd}/{sanitized}' '{cwd}/{q}'", file = log)
                 except OSError as e:
                     print(e)

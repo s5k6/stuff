@@ -210,8 +210,10 @@ Multi_key
         Right "↱"
     semicolon "▷"
     slash
-        equal space "≠"
-        equal equal "≢"
+        equal
+            space "≠"
+            equal "≢"
+        Right "↛"
         s less "⊄"
         s greater "⊅"
         s equal less "⊈"

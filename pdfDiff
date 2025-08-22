@@ -88,18 +88,24 @@ declare -i off="${3-0}"; # 3rd argument is offset, or 0
 in2="$((in2 + off))"
 declare -i tot="$(( in1 > in2 ? in1 : in2 ))"
 
-
-for (( n = 0; n < tot; n++ )); do
+for (( n = 1; n <= tot; n++ )); do
     printf -v i1 '%s/%08d.png' "${d1}" "$((n + off))"
     printf -v i2 '%s/%08d.png' "${d2}" "${n}"
     printf -v o  '%s/%08d-%08d.png' "${dir}" "$((n + off))" "${n}"
+    echo "$n, $i1, $i2"
     if test -e "$i1" -a -e "$i2"; then
         if test "$p" -gt 0; then
             p="$((p - 1))";
         else
             wait -n;
         fi;
-        gm composite -compose difference "${i1}" "${i2}" "${o}" &
+        cmd=( gm composite -compose difference "${i1}" "${i2}" "${o}" )
+        printf '$'
+        printf ' %s' "${cmd[@]}"
+        printf '\n'
+        "${cmd[@]}" &
+    else
+        echo 'Not found'
     fi;
 done;
 

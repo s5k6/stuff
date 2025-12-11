@@ -1,0 +1,21 @@
+#!/bin/bash
+# Copyright 2019 Stefan Klinger <http://stefan-klinger.de>
+set -u -e -C;
+shopt -s nullglob failglob
+
+if test "${2-}"; then
+    dir="${2}"
+else
+    dir="${1%/}"; dir="${dir%.git}"; dir="${dir%/}"; dir="${dir##*/}"
+fi
+mkdir "${dir}"
+cd "${dir}"
+git clone -n "${1}" _DETACHED
+cd _DETACHED
+head="$(git symbolic-ref --short HEAD)"
+
+emptyTree="$(git hash-object -t tree /dev/null)"
+commit="$(git commit-tree -m 'empty tree' "${emptyTree}" < /dev/null)"
+git checkout --detach "${commit}"
+
+git worktree add "../${head}" "${head}"

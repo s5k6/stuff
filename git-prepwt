@@ -1,0 +1,55 @@
+#!/bin/bash
+# Copyright 2019 Stefan Klinger <http://stefan-klinger.de>
+set -u -e -C;
+shopt -s nullglob failglob
+
+function err { echo $'\e[1;31m'"$@"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$@"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$@"$'\e[m'; }
+
+function ask_yN {
+    local answer=''
+    read -n 1 -s -p $'\e[34m'"$* [yN]"$'\e[m' answer
+    if test "${answer}" = y; then
+        info yes
+        return 0
+    fi
+    info no
+    return 1
+}
+
+
+# When deeper in the hierarchy, we may sit on a directory that is
+# about to be removed.
+
+root="$(git rev-parse --show-toplevel)"
+if ! test "$(pwd -P)" = "${root}"; then
+    err 'May remove directory!  Must be run from repository root.'
+fi
+
+
+# If we are already in a worktree, then `.git` is not a directory
+
+if ! test -d .git; then
+    err 'Not a directory: .git'
+fi
+
+
+# When already prepared, we should be in detached head mode.
+
+if ! head="$(git symbolic-ref --short HEAD)"; then
+    err 'Maybe already prepared?'
+fi
+
+
+# create dummy commit for detached checkout
+
+msg='commit dummy with empty tree'
+emptyTree="$(git hash-object -t tree /dev/null)"
+commit="$(git commit-tree -m "${msg}" "${emptyTree}" < /dev/null)"
+git checkout --detach "${commit}"
+
+
+# Create worktree for what previously was HEAD
+
+git worktree add "${head}"

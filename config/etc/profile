@@ -1,0 +1,43 @@
+# /etc/profile
+
+append_path () {
+    case ":$PATH:" in
+        *:"$1":*)
+            ;;
+        *)
+            PATH="${PATH:+$PATH:}$1"
+    esac
+}
+
+# Set our default path
+PATH="/usr/local/bin:/usr/bin:/bin";
+test -d "${HOME}/.local/bin" && PATH="${HOME}/.local/bin:${PATH}";
+#test -d "${HOME}/opt/bin" && PATH="${HOME}/opt/bin:${PATH}";
+export PATH;
+
+# Load profiles from /etc/profile.d
+if test -d /etc/profile.d/; then
+   for profile in /etc/profile.d/*.sh; do
+       test -r "$profile" && source "$profile"
+   done
+   unset profile
+fi
+
+# input method for gtk applications
+#export GTK_IM_MODULE=xim;
+#export QT_IM_MODULE=xim;
+
+export LESS='-i -j10 -M -R'
+
+
+# Termcap is outdated, old, and crusty, kill it.
+unset TERMCAP
+
+# Man is much better than us at figuring this out
+unset MANPATH
+
+# This file is only read by bash on login.  In this case, bash will
+# not read the bashrc files, even if it is interactive.  We fix this
+# here: In an interactive (PS1 is set) login (this file is read)
+# shell, source the bashrc files.
+if test "${PS1-}"; then source /etc/bash.bashrc || true; fi

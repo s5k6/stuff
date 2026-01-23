@@ -59,4 +59,4 @@ ORPHAN 40;33;01 ### symlink to nonexistent file: bold-red on black
 #SETGID 37;41 ### file that is setgid: white on red
 #SETUID 37;41 ### file that is setuid: white on red
 SOCK 40;33 ### socket: yellow on black
-
+#.readline-colored-completion-prefix 47

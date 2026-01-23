@@ -5,22 +5,12 @@ SSH
     $ chmod 700 ~/.ssh
     $ install -m600 home_ssh_config ~/.ssh/config
 
-    # rsync --chmod=644 \
-      x11_app-defaults_SshAskpass /usr/share/X11/app-defaults/SshAskpass
+X resources
 
-
-XTerm
-
-    # rsync --chmod=644 XTerm XTerm-color /usr/share/X11/app-defaults/
+    # install -o root -g root -m 644 -t /usr/share/X11/app-defaults/ \
+      x11_app-defaults/*
 
 
 Profile & Shell
 
-    # rsync --chmod 644 etc_dircolors /etc/dircolors
-
-    # rsync --chmod 644 etc_bash.bashrc /etc/bash.bashrc
-    # rsync --chmod 644 etc_profile /etc/profile
-
-Tmux
-
-    # rsync --chmod 644 etc_tmux.conf /etc/tmux.conf
+    # install -o root -g root -m 644 -t /etc etc/*

@@ -1,0 +1,20 @@
+#!/bin/bash
+set -u -e -C;
+shopt -s nullglob failglob
+
+function err { echo $'\e[1;31m'"$*"$'\e[m' >&2; exit 1; }
+function warn { echo $'\e[1;35m'"$*"$'\e[m' >&2; }
+function info { echo $'\e[36m'"$*"$'\e[m'; }
+
+cat <<'.'
+
+Copying the bookmarklet to xclip, so you should be able to paste it
+with a middle click as a new bokmark's URL.
+
+.
+
+{
+    printf 'javascript:('
+    tr -d '\n' <getId.js | sed -E 's/\s+/ /g'
+    printf ')();\n'
+} | xclip -i -l 1 -quiet;

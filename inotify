@@ -28,9 +28,9 @@ Repeatedly run COMMAND, once at the beginning, and then every time
 `inotifywait` reports an event while watching FILES.  A semaphore is
 used to throttle execution to at most once per second.
 
-    inotify [FILES... --] COMMAND...
+    inotify [ FILES... -- ] COMMAND...
 
-If no FILES are given, the executable itself is watched.
+The executable itself is always added to the watch list.
 
 EOF
 exit; fi
@@ -50,10 +50,14 @@ for (( i = 0; i < "${#args[@]}"; i++ )); do
     fi
 done
 
-if test "${#files[@]}" -lt 1; then
+if test "${#cmd[@]}" -lt 1; then
     cmd=( "${@}" )
-    files=( "$(type -p "${cmd[0]}")" )
 fi
+
+# always add executable to watch list
+files+=( "$(type -p "${cmd[0]}")" )
+
+
 
 echo "Files: ${files[@]}"
 echo "Cmd: ${cmd[@]}"
@@ -73,6 +77,7 @@ while true; do
         if sem "$s" -i1 -x -t -f -v0 -- sleep 1; then
             clear
             if "${cmd[@]}" 0<&-; then info ok; else warn failed; fi
+            date
         fi
     done < <(inotifywait -m -e "${events}" --format %e "${files[@]}")
     sleep 1

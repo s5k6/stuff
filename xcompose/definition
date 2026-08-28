@@ -7,10 +7,6 @@ Multi_key
         n "¬"
         t "⊤"
         b "⊥"
-    o
-        o "°"
-        C "℃"
-        F "℉"
     O
         r "®"
         c "©"
@@ -30,6 +26,12 @@ Multi_key
         greater "⊃"
         less "⊂"
     t m "™"
+    u
+      A "Å"
+      C "℃"
+      D "°"
+      F "℉"
+      l "ℓ"
     acute
         a "á"
         e "é"

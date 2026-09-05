@@ -9,22 +9,15 @@ set -u +H -C
 # checkwinsize — check size of window
 # failglob — failed globbing raises an error
 # globstar — ** matches recursively
+# nullglob — temporarily disable failglob for glob to yield empty
 
 shopt -s checkwinsize failglob nullglob globstar
 
 
 
-# Readline configuration.  # Try `help bind`, and `bind -p`.
-# https://www.gnu.org/software/bash/manual/html_node/Readline-Init-File-Syntax.html
-
-bind 'set show-all-if-ambiguous on'
-bind 'set enable-bracketed-paste on'
-
-
-
 # history settings
 
-# avoid duplicate entries in history, skip those with leading space
+# avoid duplicate entries in history, skip dangerous ones
 HISTCONTROL='ignoredups:ignorespace'
 HISTIGNORE='reboot*:poweroff*'
 
@@ -36,13 +29,22 @@ HISTFILESIZE="${HISTSIZE}"
 
 # Defining a nice prompt
 
-if test -t 1 && grep -Eqx 'xterm' <<< "${TERM:-}"; then
-    PS1='\[\e]0;\u@\h:\w\a\e[0;4;$(
-if test "$?" -eq 0; then echo 32; else echo 31; fi
-)m\]\u@\h:\w\$\[\e[0m\] '
+PROMPT_COMMAND=()
+
+function prompt {
+    local ec="$?"
+    test "$ec" -eq 0 && echo '4;32m' || echo '4;31m'
+    return "$ec"
+}
+
+test "${UID}" = 0 && suf='#' || suf='$'
+if test -t 1 && ( test "${TERM}" = xterm || test "${TERM}" = screen ); then
+    PS1='\[\e]0;\u@\h:\w\a\e[0;$(prompt)\]\u@\h:\w'"${suf}"'\[\e[0m\] '
+    test "${TERM}" = screen && PS1="+${PS1}"
 else
-    PS1='\u@\h:\w\$ '
+    PS1="\$? \u@\h:\w${suf} "
 fi
+unset suf
 
 PS2='> '
 
@@ -55,23 +57,30 @@ if test /etc/dircolors -nt /etc/dircolors.bash; then
 fi
 
 source /etc/dircolors.bash
-LS_COLORS+=':*readline-colored-completion-prefix=47'
+
+
+
+# Only allow my aliases
+
+unalias -a
+
+
+
+# these functions provide the typo facility
+
+function typo {
+  alias "$1"="echo \"$1 is considered a typo of $2; unalias to use.\"; false"
+}
+
+# define what's considered a typo
+typo ex ec
+typo mc mv
+typo mf mv
+typo pkgfile 'pacman -F'
 
 
 
 # various shorthands
-
-unalias -a   # Only allow my aliases
-
-# define what's considered a typo
-function typo {
-  alias "$1"="echo \"$1 is considered a typo of $2; unalias to use.\"; false"
-}
-typo ex ec
-typo mc mv
-typo mf mv
-typo xman 'x man'
-typo pkgfile 'pacman -F'
 
 # tune ls
 alias ls='ls -T0 --color=auto --si'
@@ -84,8 +93,15 @@ alias lat='la -tr'
 alias llt='ll -tr'
 alias llat='lla -tr'
 
+# changing directories
+alias '..'='cd ..'
+
 # mime type of a file
 alias mime='file -b --mime'
+
+# careful on moving and copying
+alias mv='mv -i'
+alias cp='cp -i'
 
 # systemctl
 alias sc=systemctl
@@ -93,17 +109,16 @@ alias scu='sc --user'
 alias jc=journalctl
 alias jcu='jc --user'
 
-# do not overwrite target when moving
-alias mv='mv -i'
-alias cp='cp -i'
-
-# changing directories
-alias '..'='cd ..'
-mcd () { mkdir -p "$1" && cd "$1"; }
+# side-by-side adapt to columns
+alias diffy='diff -y -W"$COLUMNS"'
+alias diffyd='diffy --suppress-common-lines'
 
 
 
 # a better version of cd
+
+alias '..'='cd ..'
+mcd () { mkdir -p "$1" && cd "$1"; }
 
 cd_improved () {
     local tmp
@@ -132,24 +147,61 @@ cd_improved () {
 alias cd=cd_improved
 
 
+# more helpers related to cd_improved
+
+function mvo {
+    if test -d "${OTHER-}"; then
+        mv -t "${OTHER}" "${@}"
+    else
+        echo 'No OTHER directory.'
+        return 1
+    fi
+}
+
+function cpo {
+    if test -d "${OTHER-}"; then
+        cp -t "${OTHER}" "${@}"
+    else
+        echo 'No OTHER directory.'
+        return 1
+    fi
+}
+
+
+
+# more useful killall with repetition
+
+function killall_improved {
+    echo 'This shell alias repeats killall until it fails.'
+    while command killall "$@"; do
+        echo 'ok, repeat'
+        sleep 1
+    done
+}
+alias killall=killall_improved
+
+
 
 # find largest subdir
 
 function largest {
+    local last
     echo 'Finding largest files/directories' >&2
-    find . -maxdepth 1 -mindepth 1 -execdir du -sh {} \; | sort -h
+    find "${1-.}" -maxdepth 1 -mindepth 1 -print0 | xargs -0 du -sh | sort -h
 }
 
 
 
-# side-by-side diff, matching terminal width
+# what does this run
 
-function diffy {
-    diff -y -W "${COLUMNS}" "$@"
+function t {
+    p="$(type -p "${1}")"
+    if test -z "${p}"; then
+        type "${1}"
+    else
+        r="$(realpath "${p}")"
+        ls -l "${p}" "${r}"
+        file -b "${r}"
+        it="${r}"
+    fi
 }
-
-
-
-# load user's bashrc
-
-if test -r ~/.bashrc; then source ~/.bashrc; fi

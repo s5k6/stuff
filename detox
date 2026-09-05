@@ -7,7 +7,7 @@ import re
 
 
 
-badChars = re.compile('[^-a-zA-Z0-9%^&äöüßÄÖÜß.,:;]')
+badChars = re.compile('[^-a-zA-Z0-9%^äöüßÄÖÜß,:;.]')
 
 
 
@@ -28,9 +28,15 @@ def main(args):
             sanitized = "_".join(
                 filter(lambda l: l, badChars.split(p.name))
             )
+            if len(sanitized) > 0 and sanitized[0] == '-':
+                sanitized = '_' + sanitized[1:]
 
             # If there is a better name, try to rename.
             if p.name != sanitized:
+
+                if p.name[0] == '.':
+                    print(f"Skipped \x1b[32m{p.name}\x1b[m")
+                    continue
 
                 q = quote(p.name)
 

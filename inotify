@@ -28,9 +28,12 @@ Repeatedly run COMMAND, once at the beginning, and then every time
 `inotifywait` reports an event while watching FILES.  A semaphore is
 used to throttle execution to at most once per second.
 
-    inotify [ FILES... -- ] COMMAND...
+    inotify [OPTIONS] [ FILES... -- ] COMMAND...
 
 The executable itself is always added to the watch list.
+
+    -t N     # timeout after N seconds
+    -p NAME  # add result of `type -p NAME` to watch list
 
 EOF
 exit; fi
@@ -38,24 +41,42 @@ exit; fi
 s="inotify-${RANDOM}"
 trap "sem '$s' -u 2>/dev/null" exit
 
+timeout=''
 files=()
 cmd=()
+
+while test "${0-}" -a "${1:0:1}" = -; do
+    if test "${1:0:2}" = '-t'; then
+        timeout="${2}"
+        shift 2
+    elif test "${1:0:2}" = '-p'; then
+        files+=( "$(type -p "${2}")" )
+        shift 2
+    else
+        err "Invalid option: ${1}"
+    fi
+done
+
 args=( "${@}" )
 
 for (( i = 0; i < "${#args[@]}"; i++ )); do
     if test "${args[$i]}" = '--'; then
-        files=( "${args[@]:0:$i}" )
+        files+=( "${args[@]:0:$i}" )
         cmd=( "${args[@]:$((i+1))}" )
         break
     fi
 done
 
 if test "${#cmd[@]}" -lt 1; then
-    cmd=( "${@}" )
+    cmd=( "${args[@]}" )
 fi
 
 # always add executable to watch list
 files+=( "$(type -p "${cmd[0]}")" )
+
+if test "${timeout}"; then
+    cmd=( timeout -k1 "${timeout}" "${cmd[@]}" )
+fi
 
 
 
@@ -65,8 +86,7 @@ echo "Cmd: ${cmd[@]}"
 events=close_write,delete,delete_self,move,move_self
 
 while true; do
-    clear
-    if "${cmd[@]}" 0<&-; then info ok; else warn failed; fi
+    if "${cmd[@]}" 0<&-; then info ok; else warn "failed $?"; fi
     date
     while IFS=, read -ra es; do
         #echo "events" "${es[@]}"
@@ -81,5 +101,6 @@ while true; do
         fi
     done < <(inotifywait -m -e "${events}" --format %e "${files[@]}")
     sleep 1
+    clear
 done
 

@@ -187,6 +187,7 @@ Multi_key
         period "…"
         space "∘"
     quotedbl
+        space "″"
         quotedbl "“”"
         a "ä"
         A "Ä"
